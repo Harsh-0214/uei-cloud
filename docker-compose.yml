@@ -1,0 +1,39 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: uei-postgres
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    # Keep DB private by default (recommended)
+    # ports:
+    #   - "5432:5432"
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: uei-grafana
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "3000:3000"
+    depends_on:
+      - postgres
+    volumes:
+      - grafana_data:/var/lib/grafana
+
+  api:
+    build: ./api
+    container_name: uei-cloud-api
+    restart: unless-stopped
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASS: ${POSTGRES_PASSWORD}
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
