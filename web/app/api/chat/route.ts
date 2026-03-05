@@ -104,8 +104,8 @@ Instructions:
 
           if (final.stop_reason === 'end_turn') {
             const text = final.content
-              .filter((b) => b.type === 'text')
-              .map((b) => (b as Anthropic.TextBlock).text)
+              .filter((b: Anthropic.ContentBlock) => b.type === 'text')
+              .map((b: Anthropic.ContentBlock) => (b as Anthropic.TextBlock).text)
               .join('');
             send({ type: 'done', assistantText: text });
             break;
