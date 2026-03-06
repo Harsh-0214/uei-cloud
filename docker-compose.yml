@@ -51,3 +51,7 @@ services:
     depends_on:
       - api
       - grafana
+
+volumes:
+  pgdata:
+  grafana_data:
