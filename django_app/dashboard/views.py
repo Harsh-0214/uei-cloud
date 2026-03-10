@@ -38,8 +38,16 @@ def latest(request):
     url = f"{settings.API_URL}/latest"
     if node_id:
         url += f"?node_id={node_id}"
+
+    # Forward the Authorization header so FastAPI can validate the JWT
+    # and filter telemetry by the user's organization.
+    headers = {}
+    auth = request.META.get('HTTP_AUTHORIZATION')
+    if auth:
+        headers['Authorization'] = auth
+
     try:
-        resp = requests.get(url, timeout=5)
+        resp = requests.get(url, headers=headers, timeout=5)
         return JsonResponse(resp.json(), safe=False, status=resp.status_code)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=502)

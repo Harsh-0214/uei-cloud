@@ -5,8 +5,13 @@ export async function GET(req: Request) {
   const nodeId = searchParams.get('node_id');
   const url = `${DJANGO_URL}/api/latest${nodeId ? `?node_id=${encodeURIComponent(nodeId)}` : ''}`;
 
+  // Forward the JWT so Django can pass it to FastAPI for org-filtering.
+  const headers: HeadersInit = {};
+  const auth = req.headers.get('Authorization');
+  if (auth) headers['Authorization'] = auth;
+
   try {
-    const resp = await fetch(url, { cache: 'no-store' });
+    const resp = await fetch(url, { cache: 'no-store', headers });
     const data = await resp.json();
     return Response.json(data, { status: resp.status });
   } catch {

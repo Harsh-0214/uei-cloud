@@ -5,8 +5,13 @@ export async function GET(req: Request) {
   const target = new URL(`${DJANGO_URL}/api/metrics`);
   searchParams.forEach((v, k) => target.searchParams.set(k, v));
 
+  // Forward the JWT so Django can pass it along if needed.
+  const headers: HeadersInit = {};
+  const auth = req.headers.get('Authorization');
+  if (auth) headers['Authorization'] = auth;
+
   try {
-    const resp = await fetch(target.toString(), { cache: 'no-store' });
+    const resp = await fetch(target.toString(), { cache: 'no-store', headers });
     const data = await resp.json();
     return Response.json(data, { status: resp.status });
   } catch {
