@@ -374,8 +374,12 @@ _BLOCKED = re.compile(
 )
 
 
+class QueryRequest(BaseModel):
+    sql: str
+
+
 @app.post("/query")
-def query(req: "QueryRequest", current_user: dict = Depends(get_current_user)) -> Any:
+def query(req: QueryRequest, current_user: dict = Depends(get_current_user)) -> Any:
     """Execute a read-only SELECT query (used by the AI chatbot). Requires auth."""
     stripped = req.sql.strip()
 
@@ -392,7 +396,3 @@ def query(req: "QueryRequest", current_user: dict = Depends(get_current_user)) -
             rows = cur.fetchmany(200)
 
     return [dict(r) for r in rows]
-
-
-class QueryRequest(BaseModel):
-    sql: str
