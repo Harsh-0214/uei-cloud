@@ -44,14 +44,14 @@ function renderMd(text: string): string {
   return text
     .replace(
       /```[\w]*\n?([\s\S]*?)```/g,
-      '<pre style="background:rgba(0,200,240,0.04);border:1px solid rgba(0,200,240,0.12);padding:8px;font-size:0.7rem;overflow-x:auto;margin:6px 0;font-family:\'Share Tech Mono\',monospace;color:#c8dff0">$1</pre>',
+      '<pre style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:10px;font-size:0.72rem;overflow-x:auto;margin:6px 0;font-family:\'DM Mono\',monospace;color:#e8e8e6">$1</pre>',
     )
     .replace(
       /`([^`]+)`/g,
-      '<code style="background:rgba(0,200,240,0.07);padding:1px 5px;font-family:\'Share Tech Mono\',monospace;font-size:0.8em">$1</code>',
+      '<code style="background:rgba(255,255,255,0.08);padding:1px 6px;border-radius:4px;font-family:\'DM Mono\',monospace;font-size:0.82em">$1</code>',
     )
-    .replace(/\*\*([^*]+)\*\*/g, '<strong style="color:#c8dff0">$1</strong>')
-    .replace(/^\s*[-*]\s+(.+)$/gm, '<li style="margin-left:12px;margin-bottom:2px">$1</li>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong style="color:#e8e8e6">$1</strong>')
+    .replace(/^\s*[-*]\s+(.+)$/gm, '<li style="margin-left:14px;margin-bottom:3px">$1</li>')
     .replace(/\n/g, '<br>');
 }
 
@@ -65,26 +65,26 @@ const CHART_DEFAULTS = {
   plugins: {
     legend: { display: false },
     tooltip: {
-      backgroundColor: '#0a1520',
-      titleColor: '#4d7a9a',
-      bodyColor: '#c8dff0',
-      borderColor: 'rgba(0, 200, 240, 0.15)',
+      backgroundColor: '#252523',
+      titleColor: '#88887e',
+      bodyColor: '#e8e8e6',
+      borderColor: 'rgba(255,255,255,0.1)',
       borderWidth: 1,
-      cornerRadius: 0,
-      titleFont: { family: "'Share Tech Mono', monospace", size: 10 },
-      bodyFont:  { family: "'Share Tech Mono', monospace", size: 10 },
+      cornerRadius: 6,
+      titleFont: { family: "'DM Mono', monospace", size: 11 },
+      bodyFont:  { family: "'DM Mono', monospace", size: 11 },
     },
   },
   scales: {
     x: {
-      ticks: { color: '#253a4e', maxTicksLimit: 6, font: { size: 10, family: "'Share Tech Mono', monospace" } },
-      grid:  { color: 'rgba(0, 200, 240, 0.05)' },
-      border: { color: 'rgba(0, 200, 240, 0.08)' },
+      ticks: { color: '#454540', maxTicksLimit: 6, font: { size: 11, family: "'DM Mono', monospace" } },
+      grid:  { color: 'rgba(255,255,255,0.04)' },
+      border: { color: 'rgba(255,255,255,0.06)' },
     },
     y: {
-      ticks: { color: '#253a4e', font: { size: 10, family: "'Share Tech Mono', monospace" } },
-      grid:  { color: 'rgba(0, 200, 240, 0.05)' },
-      border: { color: 'rgba(0, 200, 240, 0.08)' },
+      ticks: { color: '#454540', font: { size: 11, family: "'DM Mono', monospace" } },
+      grid:  { color: 'rgba(255,255,255,0.04)' },
+      border: { color: 'rgba(255,255,255,0.06)' },
     },
   },
 };
@@ -93,31 +93,28 @@ const CHART_DEFAULTS = {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 10,
-      marginBottom: 12,
-      fontFamily: 'var(--ff-ui)', fontSize: '0.58rem',
-      color: 'var(--c-txt3)', letterSpacing: '0.15em', textTransform: 'uppercase',
+    <p style={{
+      fontSize: '0.72rem', fontWeight: 600,
+      color: 'var(--txt2)', marginBottom: 14,
     }}>
-      <span>{children}</span>
-      <div style={{ flex: 1, height: 1, background: 'rgba(0, 200, 240, 0.07)' }} />
-    </div>
+      {children}
+    </p>
   );
 }
 
 function QueryBadge({ q }: { q: { sql: string; rows: number } }) {
   return (
     <div style={{
-      display: 'flex', alignItems: 'flex-start', gap: 6,
-      background: 'rgba(0, 200, 240, 0.03)',
-      border: '1px solid rgba(0, 200, 240, 0.1)',
-      padding: '4px 8px', marginBottom: 5,
-      fontFamily: "'Share Tech Mono', monospace", fontSize: '0.63rem',
-      color: 'rgba(0, 229, 255, 0.55)', wordBreak: 'break-all',
+      display: 'flex', alignItems: 'flex-start', gap: 8,
+      background: 'rgba(255,255,255,0.04)',
+      borderRadius: 6,
+      padding: '5px 9px', marginBottom: 6,
+      fontFamily: "'DM Mono', monospace", fontSize: '0.68rem',
+      color: 'var(--txt2)', wordBreak: 'break-all',
     }}>
-      <span style={{ color: '#00e5ff', flexShrink: 0 }}>▶</span>
-      <span>{q.sql.trim()}</span>
-      <span style={{ color: '#253a4e', marginLeft: 'auto', paddingLeft: 6, flexShrink: 0 }}>{q.rows}r</span>
+      <span style={{ color: 'var(--accent)', flexShrink: 0, fontWeight: 500 }}>SQL</span>
+      <span style={{ flex: 1 }}>{q.sql.trim()}</span>
+      <span style={{ color: 'var(--txt3)', flexShrink: 0 }}>{q.rows}r</span>
     </div>
   );
 }
@@ -130,16 +127,16 @@ function MetricCard({
 }) {
   const cls = { normal: '', warning: 'warn', danger: 'err', success: 'ok' }[highlight];
   const valColor = {
-    normal:  'var(--c-txt)',
-    warning: 'var(--c-warn)',
-    danger:  'var(--c-err)',
-    success: 'var(--c-ok)',
+    normal:  'var(--txt)',
+    warning: 'var(--warn)',
+    danger:  'var(--err)',
+    success: 'var(--ok)',
   }[highlight];
   const barColor = {
-    normal:  'var(--c-accent)',
-    warning: 'var(--c-warn)',
-    danger:  'var(--c-err)',
-    success: 'var(--c-ok)',
+    normal:  'var(--accent)',
+    warning: 'var(--warn)',
+    danger:  'var(--err)',
+    success: 'var(--ok)',
   }[highlight];
   return (
     <div className={`mc ${cls}`}>
@@ -160,23 +157,23 @@ function MetricCard({
 // ── Dashboard ──────────────────────────────────────────────────
 
 export default function Dashboard() {
-  const [nodes,      setNodes]      = useState<TelemetryRow[]>([]);
-  const [selectedId, setSelectedId] = useState('');
-  const [timeRange,  setTimeRange]  = useState<'1h' | '6h' | '24h'>('1h');
+  const [nodes,       setNodes]       = useState<TelemetryRow[]>([]);
+  const [selectedId,  setSelectedId]  = useState('');
+  const [timeRange,   setTimeRange]   = useState<'1h' | '6h' | '24h'>('1h');
   const [initialized, setInitialized] = useState(false);
   const [lastUpdated, setLastUpdated] = useState('');
 
-  const [chatOpen,       setChatOpen]       = useState(false);
-  const [chatBusy,       setChatBusy]       = useState(false);
-  const [chatInput,      setChatInput]      = useState('');
-  const [chatHistory,    setChatHistory]    = useState<ChatMsg[]>([]);
-  const [streamingState, setStreamingState] = useState<StreamingState | null>(null);
+  const [chatOpen,        setChatOpen]        = useState(false);
+  const [chatBusy,        setChatBusy]        = useState(false);
+  const [chatInput,       setChatInput]       = useState('');
+  const [chatHistory,     setChatHistory]     = useState<ChatMsg[]>([]);
+  const [streamingState,  setStreamingState]  = useState<StreamingState | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(true);
 
   const socRef    = useRef<HTMLCanvasElement>(null);
   const voltRef   = useRef<HTMLCanvasElement>(null);
   const tempRef   = useRef<HTMLCanvasElement>(null);
-  const chartsRef = useRef<Record<string, Chart>>({});
+  const chartsRef      = useRef<Record<string, Chart>>({});
   const chatBoxRef     = useRef<HTMLDivElement>(null);
   const initializedRef = useRef(false);
 
@@ -200,11 +197,11 @@ export default function Dashboard() {
       label: l.label,
       data: data.map(d => d[l.key]),
       borderColor: l.color,
-      backgroundColor: l.color + '14',
-      borderWidth: 1.5,
+      backgroundColor: l.color + '18',
+      borderWidth: 2,
       pointRadius: 0,
       fill: true,
-      tension: 0.3,
+      tension: 0.4,
     }));
     chart.update('none');
   }
@@ -220,11 +217,11 @@ export default function Dashboard() {
         fetch(`${base}&metric=pack_voltage`).then(r => r.json()),
         fetch(`${base}&metric=temperature`).then(r => r.json()),
       ]);
-      if (chartsRef.current.soc)     updateChart(chartsRef.current.soc,     soc,  [{ key: 'value', label: 'SOC',     color: '#00e5ff' }]);
-      if (chartsRef.current.voltage) updateChart(chartsRef.current.voltage, volt, [{ key: 'value', label: 'Voltage', color: '#b06bff' }]);
+      if (chartsRef.current.soc)     updateChart(chartsRef.current.soc,     soc,  [{ key: 'value', label: 'SOC',     color: '#e09a20' }]);
+      if (chartsRef.current.voltage) updateChart(chartsRef.current.voltage, volt, [{ key: 'value', label: 'Voltage', color: '#a78bfa' }]);
       if (chartsRef.current.temp)    updateChart(chartsRef.current.temp,    temp, [
-        { key: 'high', label: 'Temp High', color: '#ff6635' },
-        { key: 'low',  label: 'Temp Low',  color: '#3b9eff' },
+        { key: 'high', label: 'Temp High', color: '#f87171' },
+        { key: 'low',  label: 'Temp Low',  color: '#60a5fa' },
       ]);
     } catch { /* ignore */ }
   }, []);
@@ -353,43 +350,44 @@ export default function Dashboard() {
   return (
     <>
       {/* ── Dashboard ── */}
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '28px 24px' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 24px' }}>
 
         {/* Header */}
-        <div style={{ marginBottom: 28, paddingBottom: 20, borderBottom: '1px solid rgba(0,200,240,0.08)' }}>
+        <div style={{ marginBottom: 32 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
             <div>
-              <div style={{ fontFamily: 'var(--ff-data)', fontSize: '0.55rem', color: 'var(--c-txt3)', letterSpacing: '0.25em', marginBottom: 6, textTransform: 'uppercase' }}>
-                UNIFIED ENERGY INTERFACE · CLOUD MONITOR
-              </div>
-              <h1 style={{ fontFamily: 'var(--ff-hud)', fontSize: '1.4rem', fontWeight: 700, color: 'var(--c-accent)', letterSpacing: '0.08em', margin: 0, lineHeight: 1 }}>
-                UEI CLOUD
+              <p style={{ fontSize: '0.72rem', fontWeight: 500, color: 'var(--txt3)', margin: '0 0 6px' }}>
+                Battery Management System
+              </p>
+              <h1 style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--txt)', margin: 0, letterSpacing: '-0.02em', lineHeight: 1 }}>
+                UEI Cloud
               </h1>
-              <div style={{ fontFamily: 'var(--ff-ui)', fontSize: '0.62rem', color: 'var(--c-txt3)', marginTop: 6, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-                Battery Management System Dashboard
-              </div>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>
               {lastUpdated && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                   <span className="live-dot" />
-                  <span style={{ fontFamily: 'var(--ff-data)', fontSize: '0.68rem', color: 'var(--c-txt2)' }}>{lastUpdated}</span>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--txt2)', fontWeight: 500 }}>
+                    Updated {lastUpdated}
+                  </span>
                 </div>
               )}
               {initialized && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontFamily: 'var(--ff-ui)', fontSize: '0.6rem', color: 'var(--c-txt3)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Node</span>
+                  <label style={{ fontSize: '0.75rem', color: 'var(--txt2)', fontWeight: 500 }}>Node</label>
                   <select
                     id="node-select"
                     value={selectedId}
                     onChange={e => handleNodeChange(e.target.value)}
                     style={{
-                      background: 'var(--c-surf)',
-                      border: '1px solid rgba(0,200,240,0.15)',
-                      color: 'var(--c-accent)',
-                      fontFamily: 'var(--ff-data)',
-                      fontSize: '0.72rem',
-                      padding: '4px 8px',
+                      background: 'var(--surf)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 6,
+                      color: 'var(--txt)',
+                      fontFamily: 'var(--ff-sans)',
+                      fontSize: '0.8rem',
+                      fontWeight: 500,
+                      padding: '5px 10px',
                       outline: 'none',
                       cursor: 'pointer',
                     }}
@@ -400,12 +398,13 @@ export default function Dashboard() {
               )}
             </div>
           </div>
+          <div style={{ height: 1, background: 'var(--border)', marginTop: 24 }} />
         </div>
 
         {/* Loading */}
         {!initialized && (
-          <div style={{ textAlign: 'center', padding: '80px 0', fontFamily: 'var(--ff-data)', fontSize: '0.8rem', color: 'var(--c-txt3)' }}>
-            <span style={{ color: 'var(--c-accent)' }}>▶</span>&nbsp;CONNECTING TO UEI CLOUD…
+          <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--txt2)', fontSize: '0.9rem' }}>
+            Connecting to UEI Cloud…
           </div>
         )}
 
@@ -415,22 +414,25 @@ export default function Dashboard() {
             {currentNode.fault_active && (
               <div style={{
                 marginBottom: 24,
-                background: 'rgba(255,51,85,0.05)',
-                border: '1px solid rgba(255,51,85,0.25)',
-                borderLeft: '3px solid var(--c-err)',
-                padding: '10px 16px',
+                background: 'rgba(248,113,113,0.08)',
+                border: '1px solid rgba(248,113,113,0.2)',
+                borderRadius: 'var(--r)',
+                padding: '14px 18px',
                 display: 'flex', alignItems: 'center', gap: 12,
               }}>
-                <span style={{ fontFamily: 'var(--ff-hud)', fontSize: '0.65rem', color: 'var(--c-err)', letterSpacing: '0.1em' }}>
-                  ⚠ FAULT ACTIVE
-                </span>
-                <span style={{ fontFamily: 'var(--ff-data)', fontSize: '0.72rem', color: 'rgba(255,51,85,0.65)' }}>
-                  {currentNode.bms_id} · CLEARED {fmt(currentNode.faults_cleared_min)} MIN AGO
-                </span>
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--err)', flexShrink: 0 }} />
+                <div>
+                  <p style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--err)', margin: 0 }}>
+                    Fault Active — {currentNode.bms_id}
+                  </p>
+                  <p style={{ fontSize: '0.75rem', color: 'rgba(248,113,113,0.6)', margin: '3px 0 0' }}>
+                    Last cleared {fmt(currentNode.faults_cleared_min)} minutes ago
+                  </p>
+                </div>
               </div>
             )}
 
-            {/* Telemetry section */}
+            {/* Telemetry */}
             <SectionLabel>Telemetry</SectionLabel>
 
             <div className="metrics-grid">
@@ -445,54 +447,56 @@ export default function Dashboard() {
               <MetricCard label="Lowest Cell"     value={fmt(currentNode.lowest_cell_v, 3)}  unit="V" />
               <MetricCard label="CCL"             value={fmt(currentNode.ccl)}             unit="A" />
               <MetricCard label="DCL"             value={fmt(currentNode.dcl)}             unit="A" />
-              <MetricCard label="Fault Status"    value={currentNode.fault_active ? 'ACTIVE' : 'CLEAR'}
+              <MetricCard label="Fault Status"    value={currentNode.fault_active ? 'Active' : 'Clear'}
                 highlight={currentNode.fault_active ? 'danger' : 'success'} />
             </div>
 
-            {/* Historical section */}
+            {/* History */}
             <SectionLabel>Historical Data</SectionLabel>
 
             {/* Time Range */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-              <span style={{ fontFamily: 'var(--ff-ui)', fontSize: '0.6rem', color: 'var(--c-txt3)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Range</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 16 }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--txt2)', fontWeight: 500, marginRight: 4 }}>Range</span>
               {(['1h', '6h', '24h'] as const).map(r => (
                 <button key={r} onClick={() => handleRangeChange(r)} style={{
-                  fontFamily: 'var(--ff-data)', fontSize: '0.7rem',
-                  padding: '3px 12px',
-                  background: timeRange === r ? 'var(--c-accent)' : 'transparent',
-                  color:      timeRange === r ? '#060b11'         : 'var(--c-txt2)',
-                  border:    `1px solid ${timeRange === r ? 'var(--c-accent)' : 'rgba(0,200,240,0.12)'}`,
+                  fontFamily: 'var(--ff-sans)',
+                  fontSize: '0.78rem',
+                  fontWeight: 500,
+                  padding: '5px 14px',
+                  borderRadius: 99,
+                  background: timeRange === r ? 'var(--accent)' : 'transparent',
+                  color:      timeRange === r ? '#111' : 'var(--txt2)',
+                  border:    `1px solid ${timeRange === r ? 'var(--accent)' : 'var(--border)'}`,
                   cursor: 'pointer',
-                  fontWeight: timeRange === r ? 700 : 400,
                   transition: 'all 0.15s',
                 }}>{r}</button>
               ))}
             </div>
 
             {/* Charts */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {[
-                { title: 'STATE OF CHARGE', canvasRef: socRef },
-                { title: 'PACK VOLTAGE',    canvasRef: voltRef },
-                { title: 'TEMPERATURE',     canvasRef: tempRef },
+                { title: 'State of Charge', canvasRef: socRef },
+                { title: 'Pack Voltage',    canvasRef: voltRef },
+                { title: 'Temperature',     canvasRef: tempRef },
               ].map(({ title, canvasRef }) => (
                 <div key={title} style={{
-                  background: 'var(--c-surf)',
-                  border: '1px solid rgba(0,200,240,0.08)',
-                  borderTop: '1px solid rgba(0,200,240,0.14)',
-                  padding: '14px 16px',
+                  background: 'var(--surf)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--r)',
+                  padding: '18px 20px',
                 }}>
-                  <div style={{ fontFamily: 'var(--ff-ui)', fontSize: '0.58rem', color: 'var(--c-txt3)', letterSpacing: '0.15em', marginBottom: 10, textTransform: 'uppercase' }}>
+                  <p style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--txt2)', margin: '0 0 14px' }}>
                     {title}
-                  </div>
+                  </p>
                   <div className="chart-container"><canvas ref={canvasRef} /></div>
                 </div>
               ))}
             </div>
 
             {/* Footer */}
-            <div style={{ marginTop: 28, paddingTop: 16, borderTop: '1px solid rgba(0,200,240,0.06)', textAlign: 'center', fontFamily: 'var(--ff-data)', fontSize: '0.6rem', color: 'var(--c-txt3)', letterSpacing: '0.1em' }}>
-              UEI CLOUD PLATFORM · {currentNode.bms_id ?? '—'} · AUTO-REFRESH 5s
+            <div style={{ marginTop: 32, paddingTop: 16, borderTop: '1px solid var(--border)', textAlign: 'center', fontSize: '0.72rem', color: 'var(--txt3)', fontWeight: 500 }}>
+              UEI Cloud Platform · {currentNode.bms_id ?? '—'}
             </div>
           </>
         )}
@@ -501,25 +505,25 @@ export default function Dashboard() {
       {/* ── Chat Bubble ── */}
       <button
         onClick={() => setChatOpen(o => !o)}
-        title="UEI Data Assistant"
+        title="Ask AI about your data"
         style={{
           position: 'fixed', bottom: 24, right: 24, zIndex: 50,
-          width: 48, height: 48,
-          background: chatOpen ? 'rgba(0,229,255,0.08)' : 'var(--c-accent)',
-          border: `1px solid ${chatOpen ? 'var(--c-accent)' : 'transparent'}`,
-          color: chatOpen ? 'var(--c-accent)' : '#060b11',
+          width: 52, height: 52,
+          background: chatOpen ? 'var(--surf2)' : 'var(--accent)',
+          border: chatOpen ? '1px solid var(--border-hi)' : 'none',
+          borderRadius: 14,
+          color: chatOpen ? 'var(--txt)' : '#111',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           cursor: 'pointer', transition: 'all 0.2s',
-          clipPath: 'polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px)',
-          boxShadow: chatOpen ? '0 0 20px rgba(0,229,255,0.18)' : '0 0 14px rgba(0,229,255,0.25)',
+          boxShadow: chatOpen ? 'none' : '0 4px 20px rgba(224,154,32,0.35)',
         }}
       >
         {chatOpen ? (
-          <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+          <svg width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
             <path d="M18 6L6 18M6 6l12 12"/>
           </svg>
         ) : (
-          <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <path d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
           </svg>
         )}
@@ -528,48 +532,48 @@ export default function Dashboard() {
       {/* ── Chat Panel ── */}
       {chatOpen && (
         <div style={{
-          position: 'fixed', bottom: 84, right: 24, zIndex: 50,
-          width: 384, height: 560,
-          background: '#070d14',
-          border: '1px solid rgba(0,200,240,0.18)',
-          borderBottom: '2px solid var(--c-accent)',
+          position: 'fixed', bottom: 88, right: 24, zIndex: 50,
+          width: 380, height: 560,
+          background: '#1a1a18',
+          border: '1px solid var(--border)',
+          borderRadius: 14,
           display: 'flex', flexDirection: 'column', overflow: 'hidden',
-          boxShadow: '0 0 40px rgba(0,200,240,0.07)',
+          boxShadow: '0 20px 60px rgba(0,0,0,0.55)',
         }}>
 
           {/* Panel Header */}
           <div style={{
-            padding: '10px 14px',
-            borderBottom: '1px solid rgba(0,200,240,0.1)',
+            padding: '14px 16px',
+            borderBottom: '1px solid var(--border)',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            background: 'rgba(0,0,0,0.2)',
           }}>
             <div>
-              <div style={{ fontFamily: 'var(--ff-hud)', fontSize: '0.62rem', color: 'var(--c-accent)', letterSpacing: '0.1em' }}>
-                UEI DATA ASSISTANT
-              </div>
-              <div style={{ fontFamily: 'var(--ff-ui)', fontSize: '0.62rem', color: 'var(--c-txt3)', marginTop: 2 }}>
-                Natural language telemetry queries
-              </div>
+              <p style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--txt)', margin: 0 }}>
+                Data Assistant
+              </p>
+              <p style={{ fontSize: '0.72rem', color: 'var(--txt2)', margin: '2px 0 0' }}>
+                Ask about your telemetry
+              </p>
             </div>
             <button onClick={newChat} style={{
-              fontFamily: 'var(--ff-data)', fontSize: '0.6rem',
+              fontFamily: 'var(--ff-sans)', fontSize: '0.72rem', fontWeight: 600,
               background: 'transparent',
-              border: '1px solid rgba(0,200,240,0.15)',
-              color: 'var(--c-txt2)', padding: '3px 8px',
-              cursor: 'pointer', letterSpacing: '0.08em',
-            }}>RESET</button>
+              border: '1px solid var(--border)',
+              borderRadius: 6,
+              color: 'var(--txt2)', padding: '4px 10px',
+              cursor: 'pointer', transition: 'all 0.15s',
+            }}>New chat</button>
           </div>
 
           {/* Messages */}
-          <div ref={chatBoxRef} style={{ flex: 1, overflowY: 'auto', padding: '12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div ref={chatBoxRef} style={{ flex: 1, overflowY: 'auto', padding: '14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
 
             {/* Suggestions */}
             {showSuggestions && chatHistory.length === 0 && !streamingState && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                <div style={{ fontFamily: 'var(--ff-data)', fontSize: '0.58rem', color: 'var(--c-txt3)', letterSpacing: '0.15em', textAlign: 'center', marginBottom: 4 }}>
-                  SUGGESTED QUERIES
-                </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <p style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--txt2)', textAlign: 'center', marginBottom: 4 }}>
+                  Suggestions
+                </p>
                 {[
                   'How many nodes are reporting?',
                   'Show the latest SOC for all nodes',
@@ -586,18 +590,18 @@ export default function Dashboard() {
             {chatHistory.map((msg, i) => (
               <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
                 <div style={{
-                  maxWidth: '88%', padding: '8px 12px',
-                  fontSize: '0.75rem', lineHeight: '1.5',
+                  maxWidth: '86%', padding: '10px 14px',
+                  fontSize: '0.82rem', lineHeight: '1.55',
                   ...(msg.role === 'user' ? {
-                    background: 'rgba(0,229,255,0.07)',
-                    border: '1px solid rgba(0,229,255,0.15)',
-                    borderRight: '2px solid var(--c-accent)',
-                    fontFamily: 'var(--ff-ui)', color: 'var(--c-txt)',
+                    background: 'rgba(224,154,32,0.12)',
+                    border: '1px solid rgba(224,154,32,0.2)',
+                    borderRadius: '12px 12px 3px 12px',
+                    color: 'var(--txt)',
                   } : {
-                    background: 'rgba(0,0,0,0.2)',
-                    border: '1px solid rgba(0,200,240,0.07)',
-                    borderLeft: '2px solid rgba(0,229,255,0.25)',
-                    fontFamily: 'var(--ff-ui)', color: 'var(--c-txt2)',
+                    background: 'var(--surf2)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '3px 12px 12px 12px',
+                    color: 'var(--txt2)',
                   }),
                 }}>
                   {msg.role === 'assistant' && msg.queries?.map((q, qi) => (
@@ -614,17 +618,17 @@ export default function Dashboard() {
             {streamingState && (
               <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
                 <div style={{
-                  maxWidth: '88%', padding: '8px 12px',
-                  fontSize: '0.75rem', lineHeight: '1.5',
-                  background: 'rgba(0,0,0,0.2)',
-                  border: '1px solid rgba(0,200,240,0.07)',
-                  borderLeft: '2px solid rgba(0,229,255,0.25)',
-                  fontFamily: 'var(--ff-ui)', color: 'var(--c-txt2)',
+                  maxWidth: '86%', padding: '10px 14px',
+                  fontSize: '0.82rem', lineHeight: '1.55',
+                  background: 'var(--surf2)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '3px 12px 12px 12px',
+                  color: 'var(--txt2)',
                 }}>
                   {streamingState.queries.map((q, qi) => <QueryBadge key={qi} q={q} />)}
                   {streamingState.text
                     ? <div dangerouslySetInnerHTML={{ __html: renderMd(streamingState.text) }} />
-                    : <span style={{ fontFamily: 'var(--ff-data)', fontSize: '0.7rem', color: 'var(--c-txt3)' }}>PROCESSING…</span>}
+                    : <span style={{ color: 'var(--txt3)', fontStyle: 'italic' }}>Thinking…</span>}
                 </div>
               </div>
             )}
@@ -634,36 +638,41 @@ export default function Dashboard() {
           <form
             onSubmit={e => { e.preventDefault(); sendChat(chatInput); }}
             style={{
-              display: 'flex', gap: 6, padding: '10px 12px',
-              borderTop: '1px solid rgba(0,200,240,0.08)',
-              background: 'rgba(0,0,0,0.15)',
+              display: 'flex', gap: 8, padding: '12px 14px',
+              borderTop: '1px solid var(--border)',
             }}
           >
             <input
               value={chatInput}
               onChange={e => setChatInput(e.target.value)}
-              placeholder="query //"
+              placeholder="Ask about your data…"
               autoComplete="off"
               style={{
                 flex: 1,
-                background: 'rgba(0,200,240,0.04)',
-                border: '1px solid rgba(0,200,240,0.12)',
-                color: 'var(--c-txt)',
-                fontFamily: 'var(--ff-data)',
-                fontSize: '0.72rem',
-                padding: '6px 10px',
+                background: 'rgba(255,255,255,0.05)',
+                border: '1px solid var(--border)',
+                borderRadius: 8,
+                color: 'var(--txt)',
+                fontFamily: 'var(--ff-sans)',
+                fontSize: '0.85rem',
+                padding: '8px 12px',
                 outline: 'none',
+                transition: 'border-color 0.15s',
               }}
             />
             <button type="submit" disabled={chatBusy} style={{
-              background: chatBusy ? 'rgba(0,200,240,0.1)' : 'var(--c-accent)',
-              color: chatBusy ? 'var(--c-txt3)' : '#060b11',
-              fontFamily: 'var(--ff-data)', fontSize: '0.68rem',
-              padding: '6px 12px', border: 'none',
+              background: chatBusy ? 'var(--surf2)' : 'var(--accent)',
+              color: chatBusy ? 'var(--txt2)' : '#111',
+              fontFamily: 'var(--ff-sans)',
+              fontSize: '0.82rem',
+              fontWeight: 600,
+              padding: '8px 14px',
+              border: 'none',
+              borderRadius: 8,
               cursor: chatBusy ? 'not-allowed' : 'pointer',
-              fontWeight: 700, letterSpacing: '0.05em',
               transition: 'all 0.15s',
-            }}>RUN</button>
+              flexShrink: 0,
+            }}>Send</button>
           </form>
         </div>
       )}
