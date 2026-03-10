@@ -42,10 +42,16 @@ function fmt(v: number | undefined | null, d = 1): string {
 
 function renderMd(text: string): string {
   return text
-    .replace(/```[\w]*\n?([\s\S]*?)```/g, '<pre style="background:#0f172a;padding:8px;border-radius:6px;font-size:0.75rem;overflow-x:auto;margin:4px 0">$1</pre>')
-    .replace(/`([^`]+)`/g, '<code style="background:#0f172a;padding:1px 5px;border-radius:3px;font-size:0.8em">$1</code>')
-    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-    .replace(/^\s*[-*]\s+(.+)$/gm, '<li style="margin-left:12px">$1</li>')
+    .replace(
+      /```[\w]*\n?([\s\S]*?)```/g,
+      '<pre style="background:rgba(0,200,240,0.04);border:1px solid rgba(0,200,240,0.12);padding:8px;font-size:0.7rem;overflow-x:auto;margin:6px 0;font-family:\'Share Tech Mono\',monospace;color:#c8dff0">$1</pre>',
+    )
+    .replace(
+      /`([^`]+)`/g,
+      '<code style="background:rgba(0,200,240,0.07);padding:1px 5px;font-family:\'Share Tech Mono\',monospace;font-size:0.8em">$1</code>',
+    )
+    .replace(/\*\*([^*]+)\*\*/g, '<strong style="color:#c8dff0">$1</strong>')
+    .replace(/^\s*[-*]\s+(.+)$/gm, '<li style="margin-left:12px;margin-bottom:2px">$1</li>')
     .replace(/\n/g, '<br>');
 }
 
@@ -59,20 +65,62 @@ const CHART_DEFAULTS = {
   plugins: {
     legend: { display: false },
     tooltip: {
-      backgroundColor: '#1e293b',
-      titleColor: '#94a3b8',
-      bodyColor: '#e2e8f0',
-      borderColor: '#334155',
+      backgroundColor: '#0a1520',
+      titleColor: '#4d7a9a',
+      bodyColor: '#c8dff0',
+      borderColor: 'rgba(0, 200, 240, 0.15)',
       borderWidth: 1,
+      cornerRadius: 0,
+      titleFont: { family: "'Share Tech Mono', monospace", size: 10 },
+      bodyFont:  { family: "'Share Tech Mono', monospace", size: 10 },
     },
   },
   scales: {
-    x: { ticks: { color: '#475569', maxTicksLimit: 6, font: { size: 10 } }, grid: { color: '#1e293b' } },
-    y: { ticks: { color: '#475569', font: { size: 10 } }, grid: { color: '#1e293b' } },
+    x: {
+      ticks: { color: '#253a4e', maxTicksLimit: 6, font: { size: 10, family: "'Share Tech Mono', monospace" } },
+      grid:  { color: 'rgba(0, 200, 240, 0.05)' },
+      border: { color: 'rgba(0, 200, 240, 0.08)' },
+    },
+    y: {
+      ticks: { color: '#253a4e', font: { size: 10, family: "'Share Tech Mono', monospace" } },
+      grid:  { color: 'rgba(0, 200, 240, 0.05)' },
+      border: { color: 'rgba(0, 200, 240, 0.08)' },
+    },
   },
 };
 
-// ── MetricCard ─────────────────────────────────────────────────
+// ── Sub-components ─────────────────────────────────────────────
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 10,
+      marginBottom: 12,
+      fontFamily: 'var(--ff-ui)', fontSize: '0.58rem',
+      color: 'var(--c-txt3)', letterSpacing: '0.15em', textTransform: 'uppercase',
+    }}>
+      <span>{children}</span>
+      <div style={{ flex: 1, height: 1, background: 'rgba(0, 200, 240, 0.07)' }} />
+    </div>
+  );
+}
+
+function QueryBadge({ q }: { q: { sql: string; rows: number } }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'flex-start', gap: 6,
+      background: 'rgba(0, 200, 240, 0.03)',
+      border: '1px solid rgba(0, 200, 240, 0.1)',
+      padding: '4px 8px', marginBottom: 5,
+      fontFamily: "'Share Tech Mono', monospace", fontSize: '0.63rem',
+      color: 'rgba(0, 229, 255, 0.55)', wordBreak: 'break-all',
+    }}>
+      <span style={{ color: '#00e5ff', flexShrink: 0 }}>▶</span>
+      <span>{q.sql.trim()}</span>
+      <span style={{ color: '#253a4e', marginLeft: 'auto', paddingLeft: 6, flexShrink: 0 }}>{q.rows}r</span>
+    </div>
+  );
+}
 
 function MetricCard({
   label, value, unit = '', bar = null, highlight = 'normal',
@@ -80,18 +128,29 @@ function MetricCard({
   label: string; value: string; unit?: string;
   bar?: number | null; highlight?: 'normal' | 'warning' | 'danger' | 'success';
 }) {
-  const colors = { normal: '#f1f5f9', warning: '#fbbf24', danger: '#f87171', success: '#34d399' };
-  const barColor = highlight === 'danger' ? '#f87171' : highlight === 'warning' ? '#fbbf24' : '#06b6d4';
+  const cls = { normal: '', warning: 'warn', danger: 'err', success: 'ok' }[highlight];
+  const valColor = {
+    normal:  'var(--c-txt)',
+    warning: 'var(--c-warn)',
+    danger:  'var(--c-err)',
+    success: 'var(--c-ok)',
+  }[highlight];
+  const barColor = {
+    normal:  'var(--c-accent)',
+    warning: 'var(--c-warn)',
+    danger:  'var(--c-err)',
+    success: 'var(--c-ok)',
+  }[highlight];
   return (
-    <div className="metric-card">
-      <div className="metric-label">{label}</div>
-      <div style={{ color: colors[highlight] }}>
-        <span className="metric-value">{value}</span>
-        <span className="metric-unit">{unit}</span>
+    <div className={`mc ${cls}`}>
+      <div className="mc-label">{label}</div>
+      <div>
+        <span className="mc-value" style={{ color: valColor }}>{value}</span>
+        <span className="mc-unit">{unit}</span>
       </div>
       {bar !== null && bar !== undefined && (
-        <div className="bar-bg">
-          <div className="bar-fg" style={{ width: `${Math.min(100, Math.max(0, bar))}%`, background: barColor }} />
+        <div className="mc-bar-bg">
+          <div className="mc-bar-fg" style={{ width: `${Math.min(100, Math.max(0, bar))}%`, background: barColor }} />
         </div>
       )}
     </div>
@@ -101,16 +160,16 @@ function MetricCard({
 // ── Dashboard ──────────────────────────────────────────────────
 
 export default function Dashboard() {
-  const [nodes, setNodes] = useState<TelemetryRow[]>([]);
+  const [nodes,      setNodes]      = useState<TelemetryRow[]>([]);
   const [selectedId, setSelectedId] = useState('');
-  const [timeRange, setTimeRange] = useState<'1h' | '6h' | '24h'>('1h');
+  const [timeRange,  setTimeRange]  = useState<'1h' | '6h' | '24h'>('1h');
   const [initialized, setInitialized] = useState(false);
   const [lastUpdated, setLastUpdated] = useState('');
 
-  const [chatOpen, setChatOpen] = useState(false);
-  const [chatBusy, setChatBusy] = useState(false);
-  const [chatInput, setChatInput] = useState('');
-  const [chatHistory, setChatHistory] = useState<ChatMsg[]>([]);
+  const [chatOpen,       setChatOpen]       = useState(false);
+  const [chatBusy,       setChatBusy]       = useState(false);
+  const [chatInput,      setChatInput]      = useState('');
+  const [chatHistory,    setChatHistory]    = useState<ChatMsg[]>([]);
   const [streamingState, setStreamingState] = useState<StreamingState | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(true);
 
@@ -118,7 +177,7 @@ export default function Dashboard() {
   const voltRef   = useRef<HTMLCanvasElement>(null);
   const tempRef   = useRef<HTMLCanvasElement>(null);
   const chartsRef = useRef<Record<string, Chart>>({});
-  const chatBoxRef = useRef<HTMLDivElement>(null);
+  const chatBoxRef     = useRef<HTMLDivElement>(null);
   const initializedRef = useRef(false);
 
   // ── Charts ──────────────────────────────────────────────────
@@ -141,8 +200,8 @@ export default function Dashboard() {
       label: l.label,
       data: data.map(d => d[l.key]),
       borderColor: l.color,
-      backgroundColor: l.color + '18',
-      borderWidth: 2,
+      backgroundColor: l.color + '14',
+      borderWidth: 1.5,
       pointRadius: 0,
       fill: true,
       tension: 0.3,
@@ -161,11 +220,11 @@ export default function Dashboard() {
         fetch(`${base}&metric=pack_voltage`).then(r => r.json()),
         fetch(`${base}&metric=temperature`).then(r => r.json()),
       ]);
-      if (chartsRef.current.soc)     updateChart(chartsRef.current.soc,     soc,  [{ key: 'value', label: 'SOC',     color: '#06b6d4' }]);
-      if (chartsRef.current.voltage) updateChart(chartsRef.current.voltage, volt, [{ key: 'value', label: 'Voltage', color: '#a78bfa' }]);
+      if (chartsRef.current.soc)     updateChart(chartsRef.current.soc,     soc,  [{ key: 'value', label: 'SOC',     color: '#00e5ff' }]);
+      if (chartsRef.current.voltage) updateChart(chartsRef.current.voltage, volt, [{ key: 'value', label: 'Voltage', color: '#b06bff' }]);
       if (chartsRef.current.temp)    updateChart(chartsRef.current.temp,    temp, [
-        { key: 'high', label: 'Temp High', color: '#f97316' },
-        { key: 'low',  label: 'Temp Low',  color: '#60a5fa' },
+        { key: 'high', label: 'Temp High', color: '#ff6635' },
+        { key: 'low',  label: 'Temp Low',  color: '#3b9eff' },
       ]);
     } catch { /* ignore */ }
   }, []);
@@ -176,7 +235,7 @@ export default function Dashboard() {
       const data = await resp.json();
       const rows: TelemetryRow[] = Array.isArray(data) ? data : [data];
       setNodes(rows);
-      setLastUpdated('Updated ' + new Date().toLocaleTimeString());
+      setLastUpdated(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
       if (!initializedRef.current && rows.length) {
         initializedRef.current = true;
         setInitialized(true);
@@ -201,11 +260,8 @@ export default function Dashboard() {
     return () => { clearInterval(i1); clearInterval(i2); };
   }, [fetchLatest, fetchCharts]);
 
-  // Scroll chat to bottom when streaming updates
   useEffect(() => {
-    if (chatBoxRef.current) {
-      chatBoxRef.current.scrollTop = chatBoxRef.current.scrollHeight;
-    }
+    if (chatBoxRef.current) chatBoxRef.current.scrollTop = chatBoxRef.current.scrollHeight;
   }, [streamingState, chatHistory]);
 
   // ── Helpers ─────────────────────────────────────────────────
@@ -297,33 +353,59 @@ export default function Dashboard() {
   return (
     <>
       {/* ── Dashboard ── */}
-      <div className="max-w-7xl mx-auto p-6">
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '28px 24px' }}>
 
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-cyan-400 tracking-tight">UEI Cloud Dashboard</h1>
-            <p className="text-slate-500 text-xs mt-1">{lastUpdated}</p>
-          </div>
-          {initialized && (
-            <div className="flex items-center gap-3">
-              <span className="text-slate-400 text-sm">Node</span>
-              <select
-                id="node-select"
-                value={selectedId}
-                onChange={e => handleNodeChange(e.target.value)}
-                className="bg-slate-800 border border-slate-600 text-slate-100 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-cyan-500"
-              >
-                {nodes.map(n => <option key={n.node_id} value={n.node_id}>{n.node_id}</option>)}
-              </select>
+        <div style={{ marginBottom: 28, paddingBottom: 20, borderBottom: '1px solid rgba(0,200,240,0.08)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
+            <div>
+              <div style={{ fontFamily: 'var(--ff-data)', fontSize: '0.55rem', color: 'var(--c-txt3)', letterSpacing: '0.25em', marginBottom: 6, textTransform: 'uppercase' }}>
+                UNIFIED ENERGY INTERFACE · CLOUD MONITOR
+              </div>
+              <h1 style={{ fontFamily: 'var(--ff-hud)', fontSize: '1.4rem', fontWeight: 700, color: 'var(--c-accent)', letterSpacing: '0.08em', margin: 0, lineHeight: 1 }}>
+                UEI CLOUD
+              </h1>
+              <div style={{ fontFamily: 'var(--ff-ui)', fontSize: '0.62rem', color: 'var(--c-txt3)', marginTop: 6, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+                Battery Management System Dashboard
+              </div>
             </div>
-          )}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+              {lastUpdated && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span className="live-dot" />
+                  <span style={{ fontFamily: 'var(--ff-data)', fontSize: '0.68rem', color: 'var(--c-txt2)' }}>{lastUpdated}</span>
+                </div>
+              )}
+              {initialized && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontFamily: 'var(--ff-ui)', fontSize: '0.6rem', color: 'var(--c-txt3)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Node</span>
+                  <select
+                    id="node-select"
+                    value={selectedId}
+                    onChange={e => handleNodeChange(e.target.value)}
+                    style={{
+                      background: 'var(--c-surf)',
+                      border: '1px solid rgba(0,200,240,0.15)',
+                      color: 'var(--c-accent)',
+                      fontFamily: 'var(--ff-data)',
+                      fontSize: '0.72rem',
+                      padding: '4px 8px',
+                      outline: 'none',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {nodes.map(n => <option key={n.node_id} value={n.node_id}>{n.node_id}</option>)}
+                  </select>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Loading */}
         {!initialized && (
-          <div className="flex items-center justify-center py-20 text-slate-400 text-sm">
-            Connecting to UEI Cloud…
+          <div style={{ textAlign: 'center', padding: '80px 0', fontFamily: 'var(--ff-data)', fontSize: '0.8rem', color: 'var(--c-txt3)' }}>
+            <span style={{ color: 'var(--c-accent)' }}>▶</span>&nbsp;CONNECTING TO UEI CLOUD…
           </div>
         )}
 
@@ -331,108 +413,163 @@ export default function Dashboard() {
           <>
             {/* Fault Banner */}
             {currentNode.fault_active && (
-              <div className="mb-6 bg-red-950 border border-red-600 rounded-xl p-4 flex items-center gap-3">
-                <span className="text-red-400 font-bold text-lg">!</span>
-                <div>
-                  <p className="text-red-300 font-semibold">Fault Active — {currentNode.bms_id}</p>
-                  <p className="text-red-400 text-sm">Last cleared {fmt(currentNode.faults_cleared_min)} min ago</p>
-                </div>
+              <div style={{
+                marginBottom: 24,
+                background: 'rgba(255,51,85,0.05)',
+                border: '1px solid rgba(255,51,85,0.25)',
+                borderLeft: '3px solid var(--c-err)',
+                padding: '10px 16px',
+                display: 'flex', alignItems: 'center', gap: 12,
+              }}>
+                <span style={{ fontFamily: 'var(--ff-hud)', fontSize: '0.65rem', color: 'var(--c-err)', letterSpacing: '0.1em' }}>
+                  ⚠ FAULT ACTIVE
+                </span>
+                <span style={{ fontFamily: 'var(--ff-data)', fontSize: '0.72rem', color: 'rgba(255,51,85,0.65)' }}>
+                  {currentNode.bms_id} · CLEARED {fmt(currentNode.faults_cleared_min)} MIN AGO
+                </span>
               </div>
             )}
 
-            {/* Metric Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
-              <MetricCard label="State of Charge" value={fmt(currentNode.soc)}          unit="%" bar={currentNode.soc}
+            {/* Telemetry section */}
+            <SectionLabel>Telemetry</SectionLabel>
+
+            <div className="metrics-grid">
+              <MetricCard label="State of Charge" value={fmt(currentNode.soc)}              unit="%" bar={currentNode.soc}
                 highlight={currentNode.soc >= 30 ? 'normal' : currentNode.soc >= 15 ? 'warning' : 'danger'} />
-              <MetricCard label="Pack Voltage"    value={fmt(currentNode.pack_voltage)}  unit="V" />
-              <MetricCard label="Pack Current"    value={fmt(currentNode.pack_current)}  unit="A" />
-              <MetricCard label="Temp High"       value={fmt(currentNode.temp_high)}     unit="°C"
+              <MetricCard label="Pack Voltage"    value={fmt(currentNode.pack_voltage)}    unit="V" />
+              <MetricCard label="Pack Current"    value={fmt(currentNode.pack_current)}    unit="A" />
+              <MetricCard label="Temp High"       value={fmt(currentNode.temp_high)}       unit="°C"
                 highlight={currentNode.temp_high > 45 ? 'danger' : 'normal'} />
-              <MetricCard label="Temp Low"        value={fmt(currentNode.temp_low)}      unit="°C" />
+              <MetricCard label="Temp Low"        value={fmt(currentNode.temp_low)}        unit="°C" />
               <MetricCard label="Highest Cell"    value={fmt(currentNode.highest_cell_v, 3)} unit="V" />
               <MetricCard label="Lowest Cell"     value={fmt(currentNode.lowest_cell_v, 3)}  unit="V" />
-              <MetricCard label="CCL"             value={fmt(currentNode.ccl)}           unit="A" />
-              <MetricCard label="DCL"             value={fmt(currentNode.dcl)}           unit="A" />
-              <MetricCard label="Fault Status"    value={currentNode.fault_active ? 'ACTIVE' : 'Clear'}
+              <MetricCard label="CCL"             value={fmt(currentNode.ccl)}             unit="A" />
+              <MetricCard label="DCL"             value={fmt(currentNode.dcl)}             unit="A" />
+              <MetricCard label="Fault Status"    value={currentNode.fault_active ? 'ACTIVE' : 'CLEAR'}
                 highlight={currentNode.fault_active ? 'danger' : 'success'} />
             </div>
 
+            {/* Historical section */}
+            <SectionLabel>Historical Data</SectionLabel>
+
             {/* Time Range */}
-            <div className="flex items-center gap-3 mb-4">
-              <span className="text-slate-400 text-sm">Range</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+              <span style={{ fontFamily: 'var(--ff-ui)', fontSize: '0.6rem', color: 'var(--c-txt3)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Range</span>
               {(['1h', '6h', '24h'] as const).map(r => (
-                <button key={r} onClick={() => handleRangeChange(r)}
-                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                    timeRange === r ? 'bg-cyan-500 text-slate-950' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                  }`}
-                >{r}</button>
+                <button key={r} onClick={() => handleRangeChange(r)} style={{
+                  fontFamily: 'var(--ff-data)', fontSize: '0.7rem',
+                  padding: '3px 12px',
+                  background: timeRange === r ? 'var(--c-accent)' : 'transparent',
+                  color:      timeRange === r ? '#060b11'         : 'var(--c-txt2)',
+                  border:    `1px solid ${timeRange === r ? 'var(--c-accent)' : 'rgba(0,200,240,0.12)'}`,
+                  cursor: 'pointer',
+                  fontWeight: timeRange === r ? 700 : 400,
+                  transition: 'all 0.15s',
+                }}>{r}</button>
               ))}
             </div>
 
             {/* Charts */}
-            <div className="flex flex-col gap-4">
-              <div className="bg-slate-900 rounded-xl p-4">
-                <p className="text-slate-400 text-xs mb-3 font-medium uppercase tracking-wide">State of Charge</p>
-                <div className="chart-container"><canvas ref={socRef} /></div>
-              </div>
-              <div className="bg-slate-900 rounded-xl p-4">
-                <p className="text-slate-400 text-xs mb-3 font-medium uppercase tracking-wide">Pack Voltage</p>
-                <div className="chart-container"><canvas ref={voltRef} /></div>
-              </div>
-              <div className="bg-slate-900 rounded-xl p-4">
-                <p className="text-slate-400 text-xs mb-3 font-medium uppercase tracking-wide">Temperature</p>
-                <div className="chart-container"><canvas ref={tempRef} /></div>
-              </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {[
+                { title: 'STATE OF CHARGE', canvasRef: socRef },
+                { title: 'PACK VOLTAGE',    canvasRef: voltRef },
+                { title: 'TEMPERATURE',     canvasRef: tempRef },
+              ].map(({ title, canvasRef }) => (
+                <div key={title} style={{
+                  background: 'var(--c-surf)',
+                  border: '1px solid rgba(0,200,240,0.08)',
+                  borderTop: '1px solid rgba(0,200,240,0.14)',
+                  padding: '14px 16px',
+                }}>
+                  <div style={{ fontFamily: 'var(--ff-ui)', fontSize: '0.58rem', color: 'var(--c-txt3)', letterSpacing: '0.15em', marginBottom: 10, textTransform: 'uppercase' }}>
+                    {title}
+                  </div>
+                  <div className="chart-container"><canvas ref={canvasRef} /></div>
+                </div>
+              ))}
             </div>
 
-            <div className="mt-8 text-center text-slate-700 text-xs">
-              UEI Cloud Platform · {currentNode.bms_id ?? '—'}
+            {/* Footer */}
+            <div style={{ marginTop: 28, paddingTop: 16, borderTop: '1px solid rgba(0,200,240,0.06)', textAlign: 'center', fontFamily: 'var(--ff-data)', fontSize: '0.6rem', color: 'var(--c-txt3)', letterSpacing: '0.1em' }}>
+              UEI CLOUD PLATFORM · {currentNode.bms_id ?? '—'} · AUTO-REFRESH 5s
             </div>
           </>
         )}
       </div>
 
-      {/* ── Chatbot ── */}
-
-      {/* Bubble */}
-      <button onClick={() => setChatOpen(o => !o)}
-        className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-cyan-500 hover:bg-cyan-400 shadow-lg flex items-center justify-center transition-colors"
-        title="Ask AI">
+      {/* ── Chat Bubble ── */}
+      <button
+        onClick={() => setChatOpen(o => !o)}
+        title="UEI Data Assistant"
+        style={{
+          position: 'fixed', bottom: 24, right: 24, zIndex: 50,
+          width: 48, height: 48,
+          background: chatOpen ? 'rgba(0,229,255,0.08)' : 'var(--c-accent)',
+          border: `1px solid ${chatOpen ? 'var(--c-accent)' : 'transparent'}`,
+          color: chatOpen ? 'var(--c-accent)' : '#060b11',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'pointer', transition: 'all 0.2s',
+          clipPath: 'polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px)',
+          boxShadow: chatOpen ? '0 0 20px rgba(0,229,255,0.18)' : '0 0 14px rgba(0,229,255,0.25)',
+        }}
+      >
         {chatOpen ? (
-          <svg className="w-5 h-5 text-slate-950" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/>
+          <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+            <path d="M18 6L6 18M6 6l12 12"/>
           </svg>
         ) : (
-          <svg className="w-6 h-6 text-slate-950" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-              d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
+          <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
           </svg>
         )}
       </button>
 
-      {/* Panel */}
+      {/* ── Chat Panel ── */}
       {chatOpen && (
-        <div className="fixed bottom-24 right-6 z-50 w-96 h-[560px] bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+        <div style={{
+          position: 'fixed', bottom: 84, right: 24, zIndex: 50,
+          width: 384, height: 560,
+          background: '#070d14',
+          border: '1px solid rgba(0,200,240,0.18)',
+          borderBottom: '2px solid var(--c-accent)',
+          display: 'flex', flexDirection: 'column', overflow: 'hidden',
+          boxShadow: '0 0 40px rgba(0,200,240,0.07)',
+        }}>
 
-          {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 flex-shrink-0">
+          {/* Panel Header */}
+          <div style={{
+            padding: '10px 14px',
+            borderBottom: '1px solid rgba(0,200,240,0.1)',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            background: 'rgba(0,0,0,0.2)',
+          }}>
             <div>
-              <p className="text-sm font-semibold text-cyan-400">UEI Data Assistant</p>
-              <p className="text-xs text-slate-500">Ask about your telemetry data</p>
+              <div style={{ fontFamily: 'var(--ff-hud)', fontSize: '0.62rem', color: 'var(--c-accent)', letterSpacing: '0.1em' }}>
+                UEI DATA ASSISTANT
+              </div>
+              <div style={{ fontFamily: 'var(--ff-ui)', fontSize: '0.62rem', color: 'var(--c-txt3)', marginTop: 2 }}>
+                Natural language telemetry queries
+              </div>
             </div>
-            <button onClick={newChat}
-              className="text-xs text-slate-500 hover:text-slate-300 border border-slate-700 hover:border-slate-500 rounded-lg px-2 py-1 transition-colors">
-              New chat
-            </button>
+            <button onClick={newChat} style={{
+              fontFamily: 'var(--ff-data)', fontSize: '0.6rem',
+              background: 'transparent',
+              border: '1px solid rgba(0,200,240,0.15)',
+              color: 'var(--c-txt2)', padding: '3px 8px',
+              cursor: 'pointer', letterSpacing: '0.08em',
+            }}>RESET</button>
           </div>
 
           {/* Messages */}
-          <div ref={chatBoxRef} id="chat-messages" className="flex-1 overflow-y-auto px-3 py-3 flex flex-col gap-3">
+          <div ref={chatBoxRef} style={{ flex: 1, overflowY: 'auto', padding: '12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
 
             {/* Suggestions */}
             {showSuggestions && chatHistory.length === 0 && !streamingState && (
-              <div className="flex flex-col gap-2 pt-1">
-                <p className="text-xs text-slate-500 text-center mb-1">Suggestions</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                <div style={{ fontFamily: 'var(--ff-data)', fontSize: '0.58rem', color: 'var(--c-txt3)', letterSpacing: '0.15em', textAlign: 'center', marginBottom: 4 }}>
+                  SUGGESTED QUERIES
+                </div>
                 {[
                   'How many nodes are reporting?',
                   'Show the latest SOC for all nodes',
@@ -440,25 +577,31 @@ export default function Dashboard() {
                   'What is the average pack voltage?',
                   'Show temp trends in the last hour',
                 ].map(s => (
-                  <button key={s} className="suggestion-btn" onClick={() => sendChat(s)}>{s}</button>
+                  <button key={s} className="sug-btn" onClick={() => sendChat(s)}>{s}</button>
                 ))}
               </div>
             )}
 
             {/* History */}
             {chatHistory.map((msg, i) => (
-              <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-xs leading-relaxed ${
-                  msg.role === 'user'
-                    ? 'bg-cyan-700 text-cyan-50 rounded-br-sm'
-                    : 'bg-slate-800 text-slate-200 rounded-bl-sm'
-                }`}>
+              <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
+                <div style={{
+                  maxWidth: '88%', padding: '8px 12px',
+                  fontSize: '0.75rem', lineHeight: '1.5',
+                  ...(msg.role === 'user' ? {
+                    background: 'rgba(0,229,255,0.07)',
+                    border: '1px solid rgba(0,229,255,0.15)',
+                    borderRight: '2px solid var(--c-accent)',
+                    fontFamily: 'var(--ff-ui)', color: 'var(--c-txt)',
+                  } : {
+                    background: 'rgba(0,0,0,0.2)',
+                    border: '1px solid rgba(0,200,240,0.07)',
+                    borderLeft: '2px solid rgba(0,229,255,0.25)',
+                    fontFamily: 'var(--ff-ui)', color: 'var(--c-txt2)',
+                  }),
+                }}>
                   {msg.role === 'assistant' && msg.queries?.map((q, qi) => (
-                    <div key={qi} style={{ display: 'flex', alignItems: 'flex-start', gap: 6, background: '#0f172a', border: '1px solid #1e3a5f', borderRadius: 8, padding: '5px 8px', fontSize: '0.7rem', fontFamily: 'monospace', color: '#7dd3fc', marginBottom: 4, wordBreak: 'break-all' }}>
-                      <span style={{ color: '#22d3ee', flexShrink: 0 }}>▶</span>
-                      <span>{q.sql.trim()}</span>
-                      <span style={{ color: '#475569', marginLeft: 'auto', paddingLeft: 6, flexShrink: 0 }}>{q.rows}r</span>
-                    </div>
+                    <QueryBadge key={qi} q={q} />
                   ))}
                   {msg.role === 'assistant'
                     ? <div dangerouslySetInnerHTML={{ __html: renderMd(msg.text) }} />
@@ -469,37 +612,58 @@ export default function Dashboard() {
 
             {/* Streaming bubble */}
             {streamingState && (
-              <div className="flex justify-start">
-                <div className="max-w-[85%] rounded-2xl px-3 py-2 text-xs leading-relaxed bg-slate-800 text-slate-200 rounded-bl-sm">
-                  {streamingState.queries.map((q, qi) => (
-                    <div key={qi} style={{ display: 'flex', alignItems: 'flex-start', gap: 6, background: '#0f172a', border: '1px solid #1e3a5f', borderRadius: 8, padding: '5px 8px', fontSize: '0.7rem', fontFamily: 'monospace', color: '#7dd3fc', marginBottom: 4, wordBreak: 'break-all' }}>
-                      <span style={{ color: '#22d3ee', flexShrink: 0 }}>▶</span>
-                      <span>{q.sql.trim()}</span>
-                      <span style={{ color: '#475569', marginLeft: 'auto', paddingLeft: 6, flexShrink: 0 }}>{q.rows}r</span>
-                    </div>
-                  ))}
+              <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+                <div style={{
+                  maxWidth: '88%', padding: '8px 12px',
+                  fontSize: '0.75rem', lineHeight: '1.5',
+                  background: 'rgba(0,0,0,0.2)',
+                  border: '1px solid rgba(0,200,240,0.07)',
+                  borderLeft: '2px solid rgba(0,229,255,0.25)',
+                  fontFamily: 'var(--ff-ui)', color: 'var(--c-txt2)',
+                }}>
+                  {streamingState.queries.map((q, qi) => <QueryBadge key={qi} q={q} />)}
                   {streamingState.text
                     ? <div dangerouslySetInnerHTML={{ __html: renderMd(streamingState.text) }} />
-                    : <span style={{ color: '#64748b', fontStyle: 'italic' }}>Thinking…</span>}
+                    : <span style={{ fontFamily: 'var(--ff-data)', fontSize: '0.7rem', color: 'var(--c-txt3)' }}>PROCESSING…</span>}
                 </div>
               </div>
             )}
           </div>
 
           {/* Input */}
-          <form onSubmit={e => { e.preventDefault(); sendChat(chatInput); }}
-            className="flex gap-2 px-3 py-3 border-t border-slate-800 flex-shrink-0">
+          <form
+            onSubmit={e => { e.preventDefault(); sendChat(chatInput); }}
+            style={{
+              display: 'flex', gap: 6, padding: '10px 12px',
+              borderTop: '1px solid rgba(0,200,240,0.08)',
+              background: 'rgba(0,0,0,0.15)',
+            }}
+          >
             <input
               value={chatInput}
               onChange={e => setChatInput(e.target.value)}
-              placeholder="Ask anything…"
+              placeholder="query //"
               autoComplete="off"
-              className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-colors"
+              style={{
+                flex: 1,
+                background: 'rgba(0,200,240,0.04)',
+                border: '1px solid rgba(0,200,240,0.12)',
+                color: 'var(--c-txt)',
+                fontFamily: 'var(--ff-data)',
+                fontSize: '0.72rem',
+                padding: '6px 10px',
+                outline: 'none',
+              }}
             />
-            <button type="submit" disabled={chatBusy}
-              className="bg-cyan-600 hover:bg-cyan-700 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-xl px-3 py-2 text-xs font-semibold transition-colors">
-              Send
-            </button>
+            <button type="submit" disabled={chatBusy} style={{
+              background: chatBusy ? 'rgba(0,200,240,0.1)' : 'var(--c-accent)',
+              color: chatBusy ? 'var(--c-txt3)' : '#060b11',
+              fontFamily: 'var(--ff-data)', fontSize: '0.68rem',
+              padding: '6px 12px', border: 'none',
+              cursor: chatBusy ? 'not-allowed' : 'pointer',
+              fontWeight: 700, letterSpacing: '0.05em',
+              transition: 'all 0.15s',
+            }}>RUN</button>
           </form>
         </div>
       )}
