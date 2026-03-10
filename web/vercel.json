@@ -1,4 +1,5 @@
 {
+  "name": "uei-cloud",
   "framework": "nextjs",
   "buildCommand": "npm run build",
   "outputDirectory": ".next"

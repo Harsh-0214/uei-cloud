@@ -3,5 +3,6 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY cloud_api.py .
+COPY seed.py .
 EXPOSE 8000
 CMD ["uvicorn", "cloud_api:app", "--host", "0.0.0.0", "--port", "8000"]

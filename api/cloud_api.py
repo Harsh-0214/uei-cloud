@@ -80,7 +80,7 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(bearer)
     return dict(user)
 
 def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
-    if current_user.get("role") != "admin":
+    if current_user.get("role") not in ("admin", "superadmin"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
     return current_user
 
@@ -262,32 +262,41 @@ def latest(
     Return the most recent telemetry row(s) for the authenticated user's organization.
     Only nodes registered to the user's org (via the nodes table) are returned.
     """
-    org_id = current_user["organization_id"]
+    org_id   = current_user["organization_id"]
+    is_super = current_user.get("role") == "superadmin"
 
-    if node_id:
-        q = """
-        SELECT t.*
-        FROM telemetry t
-        JOIN nodes n ON t.node_id = n.node_id
-        WHERE t.node_id = %s
-          AND n.organization_id = %s
-        ORDER BY t.ts_utc DESC
-        LIMIT 1;
-        """
-        params = (node_id, org_id)
+    if is_super:
+        if node_id:
+            q      = "SELECT * FROM telemetry WHERE node_id = %s ORDER BY ts_utc DESC LIMIT 1;"
+            params = (node_id,)
+        else:
+            q      = "SELECT DISTINCT ON (node_id) * FROM telemetry ORDER BY node_id, ts_utc DESC;"
+            params = None
     else:
-        q = """
-        SELECT DISTINCT ON (t.node_id) t.*
-        FROM telemetry t
-        JOIN nodes n ON t.node_id = n.node_id
-        WHERE n.organization_id = %s
-        ORDER BY t.node_id, t.ts_utc DESC;
-        """
-        params = (org_id,)
+        if node_id:
+            q = """
+            SELECT t.*
+            FROM telemetry t
+            JOIN nodes n ON t.node_id = n.node_id
+            WHERE t.node_id = %s
+              AND n.organization_id = %s
+            ORDER BY t.ts_utc DESC
+            LIMIT 1;
+            """
+            params = (node_id, org_id)
+        else:
+            q = """
+            SELECT DISTINCT ON (t.node_id) t.*
+            FROM telemetry t
+            JOIN nodes n ON t.node_id = n.node_id
+            WHERE n.organization_id = %s
+            ORDER BY t.node_id, t.ts_utc DESC;
+            """
+            params = (org_id,)
 
     with db_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute(q, params)
+            cur.execute(q, params) if params else cur.execute(q)
             rows = cur.fetchall()
 
     if node_id and not rows:
@@ -305,30 +314,39 @@ def list_telemetry(
     Return recent telemetry rows for the authenticated user's organization.
     Optional node_id filter. Max 1000 rows.
     """
-    org_id = current_user["organization_id"]
-    limit  = min(limit, 1000)
+    org_id   = current_user["organization_id"]
+    is_super = current_user.get("role") == "superadmin"
+    limit    = min(limit, 1000)
 
-    if node_id:
-        q = """
-        SELECT t.*
-        FROM telemetry t
-        JOIN nodes n ON t.node_id = n.node_id
-        WHERE t.node_id = %s
-          AND n.organization_id = %s
-        ORDER BY t.ts_utc DESC
-        LIMIT %s;
-        """
-        params = (node_id, org_id, limit)
+    if is_super:
+        if node_id:
+            q      = "SELECT * FROM telemetry WHERE node_id = %s ORDER BY ts_utc DESC LIMIT %s;"
+            params = (node_id, limit)
+        else:
+            q      = "SELECT * FROM telemetry ORDER BY ts_utc DESC LIMIT %s;"
+            params = (limit,)
     else:
-        q = """
-        SELECT t.*
-        FROM telemetry t
-        JOIN nodes n ON t.node_id = n.node_id
-        WHERE n.organization_id = %s
-        ORDER BY t.ts_utc DESC
-        LIMIT %s;
-        """
-        params = (org_id, limit)
+        if node_id:
+            q = """
+            SELECT t.*
+            FROM telemetry t
+            JOIN nodes n ON t.node_id = n.node_id
+            WHERE t.node_id = %s
+              AND n.organization_id = %s
+            ORDER BY t.ts_utc DESC
+            LIMIT %s;
+            """
+            params = (node_id, org_id, limit)
+        else:
+            q = """
+            SELECT t.*
+            FROM telemetry t
+            JOIN nodes n ON t.node_id = n.node_id
+            WHERE n.organization_id = %s
+            ORDER BY t.ts_utc DESC
+            LIMIT %s;
+            """
+            params = (org_id, limit)
 
     with db_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
