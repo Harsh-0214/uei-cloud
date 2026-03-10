@@ -1,654 +1,338 @@
-'use client';
+import Link from 'next/link';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Chart, registerables } from 'chart.js';
+// ── Feature data ───────────────────────────────────────────────
 
-Chart.register(...registerables);
-
-// ── Types ──────────────────────────────────────────────────────
-
-interface TelemetryRow {
-  node_id: string;
-  bms_id: string;
-  soc: number;
-  pack_voltage: number;
-  pack_current: number;
-  temp_high: number;
-  temp_low: number;
-  ccl: number;
-  dcl: number;
-  fault_active: boolean;
-  faults_cleared_min: number;
-  highest_cell_v: number;
-  lowest_cell_v: number;
-}
-
-interface ChatMsg {
-  role: 'user' | 'assistant';
-  text: string;
-  queries?: { sql: string; rows: number }[];
-}
-
-interface StreamingState {
-  text: string;
-  queries: { sql: string; rows: number }[];
-}
-
-// ── Helpers ────────────────────────────────────────────────────
-
-function fmt(v: number | undefined | null, d = 1): string {
-  return v !== undefined && v !== null ? Number(v).toFixed(d) : '—';
-}
-
-function renderMd(text: string): string {
-  return text
-    .replace(
-      /```[\w]*\n?([\s\S]*?)```/g,
-      '<pre style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:10px;font-size:0.72rem;overflow-x:auto;margin:6px 0;font-family:\'DM Mono\',monospace;color:#e8e8e6">$1</pre>',
-    )
-    .replace(
-      /`([^`]+)`/g,
-      '<code style="background:rgba(255,255,255,0.08);padding:1px 6px;border-radius:4px;font-family:\'DM Mono\',monospace;font-size:0.82em">$1</code>',
-    )
-    .replace(/\*\*([^*]+)\*\*/g, '<strong style="color:#e8e8e6">$1</strong>')
-    .replace(/^\s*[-*]\s+(.+)$/gm, '<li style="margin-left:14px;margin-bottom:3px">$1</li>')
-    .replace(/\n/g, '<br>');
-}
-
-const escHtml = (s: string) =>
-  String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-const CHART_DEFAULTS = {
-  responsive: true,
-  maintainAspectRatio: false,
-  animation: false as const,
-  plugins: {
-    legend: { display: false },
-    tooltip: {
-      backgroundColor: '#252523',
-      titleColor: '#88887e',
-      bodyColor: '#e8e8e6',
-      borderColor: 'rgba(255,255,255,0.1)',
-      borderWidth: 1,
-      cornerRadius: 6,
-      titleFont: { family: "'DM Mono', monospace", size: 11 },
-      bodyFont:  { family: "'DM Mono', monospace", size: 11 },
-    },
+const features = [
+  {
+    title: 'Live Telemetry',
+    desc:  'SOC, pack voltage, current, and cell temperatures refreshed every 5 seconds across every registered BMS node.',
+    icon: (
+      <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+      </svg>
+    ),
   },
-  scales: {
-    x: {
-      ticks: { color: '#454540', maxTicksLimit: 6, font: { size: 11, family: "'DM Mono', monospace" } },
-      grid:  { color: 'rgba(255,255,255,0.04)' },
-      border: { color: 'rgba(255,255,255,0.06)' },
-    },
-    y: {
-      ticks: { color: '#454540', font: { size: 11, family: "'DM Mono', monospace" } },
-      grid:  { color: 'rgba(255,255,255,0.04)' },
-      border: { color: 'rgba(255,255,255,0.06)' },
-    },
+  {
+    title: 'Fault Detection',
+    desc:  'Instant fault banners and color-coded status when a BMS reports an active condition. No polling required.',
+    icon: (
+      <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+        <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+        <line x1="12" y1="9" x2="12" y2="13"/>
+        <line x1="12" y1="17" x2="12.01" y2="17"/>
+      </svg>
+    ),
   },
-};
+  {
+    title: 'Historical Trends',
+    desc:  'Visualize SOC, pack voltage, and temperature over 1h, 6h, or 24h windows. Powered by Grafana and PostgreSQL.',
+    icon: (
+      <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+      </svg>
+    ),
+  },
+  {
+    title: 'AI Data Assistant',
+    desc:  'Ask plain-English questions about your battery data. The assistant queries the database and explains trends, faults, and anomalies.',
+    icon: (
+      <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+        <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+      </svg>
+    ),
+  },
+  {
+    title: 'Multi-Tenant Access',
+    desc:  'Organizations, admin roles, and node assignment. Each team sees only their own hardware — fully isolated.',
+    icon: (
+      <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+        <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+        <circle cx="9" cy="7" r="4"/>
+        <path d="M23 21v-2a4 4 0 00-3-3.87"/>
+        <path d="M16 3.13a4 4 0 010 7.75"/>
+      </svg>
+    ),
+  },
+  {
+    title: 'Cloud Native',
+    desc:  'FastAPI backend, PostgreSQL, Grafana, Docker Compose, and a Next.js frontend deployed on Vercel.',
+    icon: (
+      <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+        <rect x="2" y="3" width="20" height="14" rx="2"/>
+        <path d="M8 21h8M12 17v4"/>
+      </svg>
+    ),
+  },
+];
 
-// ── Sub-components ─────────────────────────────────────────────
+// ── Page ───────────────────────────────────────────────────────
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+export default function LandingPage() {
   return (
-    <p style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--txt2)', marginBottom: 14 }}>
-      {children}
-    </p>
-  );
-}
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--txt)', fontFamily: 'var(--ff-sans)', overflowX: 'hidden' }}>
 
-function QueryBadge({ q }: { q: { sql: string; rows: number } }) {
-  return (
-    <div style={{
-      display: 'flex', alignItems: 'flex-start', gap: 8,
-      background: 'rgba(255,255,255,0.04)', borderRadius: 6,
-      padding: '5px 9px', marginBottom: 6,
-      fontFamily: "'DM Mono', monospace", fontSize: '0.68rem',
-      color: 'var(--txt2)', wordBreak: 'break-all',
-    }}>
-      <span style={{ color: 'var(--accent)', flexShrink: 0, fontWeight: 500 }}>SQL</span>
-      <span style={{ flex: 1 }}>{q.sql.trim()}</span>
-      <span style={{ color: 'var(--txt3)', flexShrink: 0 }}>{q.rows}r</span>
-    </div>
-  );
-}
+      {/* ── Background glow ── */}
+      <div aria-hidden style={{
+        position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0,
+        background: `
+          radial-gradient(ellipse 80% 50% at 20% -10%, rgba(224,154,32,0.08) 0%, transparent 60%),
+          radial-gradient(ellipse 60% 40% at 80% 110%, rgba(167,139,250,0.05) 0%, transparent 55%)
+        `,
+      }} />
 
-function MetricCard({
-  label, value, unit = '', bar = null, highlight = 'normal',
-}: {
-  label: string; value: string; unit?: string;
-  bar?: number | null; highlight?: 'normal' | 'warning' | 'danger' | 'success';
-}) {
-  const cls = { normal: '', warning: 'warn', danger: 'err', success: 'ok' }[highlight];
-  const valColor = { normal: 'var(--txt)', warning: 'var(--warn)', danger: 'var(--err)', success: 'var(--ok)' }[highlight];
-  const barColor = { normal: 'var(--accent)', warning: 'var(--warn)', danger: 'var(--err)', success: 'var(--ok)' }[highlight];
-  return (
-    <div className={`mc ${cls}`}>
-      <div className="mc-label">{label}</div>
-      <div>
-        <span className="mc-value" style={{ color: valColor }}>{value}</span>
-        <span className="mc-unit">{unit}</span>
-      </div>
-      {bar !== null && bar !== undefined && (
-        <div className="mc-bar-bg">
-          <div className="mc-bar-fg" style={{ width: `${Math.min(100, Math.max(0, bar))}%`, background: barColor }} />
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Dashboard ──────────────────────────────────────────────────
-
-export default function Dashboard() {
-  // ── Auth state ──────────────────────────────────────────────
-  const [authToken,   setAuthToken]   = useState<string | null>(null);
-  const [orgName,     setOrgName]     = useState('');
-  const [authChecked, setAuthChecked] = useState(false);
-
-  useEffect(() => {
-    const token = localStorage.getItem('uei_token');
-    if (!token) {
-      window.location.replace('/login');
-      return;
-    }
-    setAuthToken(token);
-    setOrgName(localStorage.getItem('uei_org_name') ?? '');
-    setAuthChecked(true);
-  }, []);
-
-  function logout() {
-    localStorage.removeItem('uei_token');
-    localStorage.removeItem('uei_org_name');
-    localStorage.removeItem('uei_role');
-    window.location.replace('/login');
-  }
-
-  // ── Data state ───────────────────────────────────────────────
-  const [nodes,       setNodes]       = useState<TelemetryRow[]>([]);
-  const [selectedId,  setSelectedId]  = useState('');
-  const [timeRange,   setTimeRange]   = useState<'1h' | '6h' | '24h'>('1h');
-  const [initialized, setInitialized] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState('');
-
-  const [chatOpen,        setChatOpen]        = useState(false);
-  const [chatBusy,        setChatBusy]        = useState(false);
-  const [chatInput,       setChatInput]       = useState('');
-  const [chatHistory,     setChatHistory]     = useState<ChatMsg[]>([]);
-  const [streamingState,  setStreamingState]  = useState<StreamingState | null>(null);
-  const [showSuggestions, setShowSuggestions] = useState(true);
-
-  const socRef    = useRef<HTMLCanvasElement>(null);
-  const voltRef   = useRef<HTMLCanvasElement>(null);
-  const tempRef   = useRef<HTMLCanvasElement>(null);
-  const chartsRef      = useRef<Record<string, Chart>>({});
-  const chatBoxRef     = useRef<HTMLDivElement>(null);
-  const initializedRef = useRef(false);
-
-  // Build Authorization header from stored token
-  const authHeaders = useCallback((): HeadersInit => {
-    const t = localStorage.getItem('uei_token');
-    return t ? { Authorization: `Bearer ${t}` } : {};
-  }, []);
-
-  // ── Charts ──────────────────────────────────────────────────
-
-  const initCharts = useCallback(() => {
-    if (!socRef.current || !voltRef.current || !tempRef.current) return;
-    chartsRef.current.soc     = new Chart(socRef.current,  { type: 'line', data: { labels: [], datasets: [] }, options: { ...CHART_DEFAULTS } });
-    chartsRef.current.voltage = new Chart(voltRef.current, { type: 'line', data: { labels: [], datasets: [] }, options: { ...CHART_DEFAULTS } });
-    chartsRef.current.temp    = new Chart(tempRef.current, { type: 'line', data: { labels: [], datasets: [] }, options: { ...CHART_DEFAULTS } });
-  }, []);
-
-  function updateChart(
-    chart: Chart,
-    data: Record<string, number>[],
-    lines: { key: string; label: string; color: string }[],
-  ) {
-    if (!data?.length) return;
-    chart.data.labels = data.map(d => new Date(d.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-    chart.data.datasets = lines.map(l => ({
-      label: l.label, data: data.map(d => d[l.key]),
-      borderColor: l.color, backgroundColor: l.color + '18',
-      borderWidth: 2, pointRadius: 0, fill: true, tension: 0.4,
-    }));
-    chart.update('none');
-  }
-
-  // ── Data fetching ───────────────────────────────────────────
-
-  const fetchCharts = useCallback(async (id: string, range: string) => {
-    if (!id) return;
-    const base = `/api/metrics?node_id=${encodeURIComponent(id)}&range=${range}`;
-    const hdrs = authHeaders();
-    try {
-      const [soc, volt, temp] = await Promise.all([
-        fetch(`${base}&metric=soc`,          { cache: 'no-store', headers: hdrs }).then(r => r.json()),
-        fetch(`${base}&metric=pack_voltage`, { cache: 'no-store', headers: hdrs }).then(r => r.json()),
-        fetch(`${base}&metric=temperature`,  { cache: 'no-store', headers: hdrs }).then(r => r.json()),
-      ]);
-      if (chartsRef.current.soc)     updateChart(chartsRef.current.soc,     soc,  [{ key: 'value', label: 'SOC',     color: '#e09a20' }]);
-      if (chartsRef.current.voltage) updateChart(chartsRef.current.voltage, volt, [{ key: 'value', label: 'Voltage', color: '#a78bfa' }]);
-      if (chartsRef.current.temp)    updateChart(chartsRef.current.temp,    temp, [
-        { key: 'high', label: 'Temp High', color: '#f87171' },
-        { key: 'low',  label: 'Temp Low',  color: '#60a5fa' },
-      ]);
-    } catch { /* ignore */ }
-  }, [authHeaders]);
-
-  const fetchLatest = useCallback(async () => {
-    try {
-      const resp = await fetch('/api/latest', {
-        cache: 'no-store',
-        headers: authHeaders(),
-      });
-
-      // Token expired or invalid — redirect to login
-      if (resp.status === 401) {
-        logout();
-        return;
-      }
-
-      const data = await resp.json();
-      const rows: TelemetryRow[] = Array.isArray(data) ? data : [data];
-      setNodes(rows);
-      setLastUpdated(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-
-      if (!initializedRef.current && rows.length) {
-        initializedRef.current = true;
-        setInitialized(true);
-        setSelectedId(rows[0].node_id);
-        setTimeout(() => {
-          initCharts();
-          fetchCharts(rows[0].node_id, '1h');
-        }, 50);
-      }
-    } catch { /* ignore */ }
-  }, [initCharts, fetchCharts, authHeaders]);
-
-  useEffect(() => {
-    if (!authChecked) return;
-    fetchLatest();
-    const i1 = setInterval(fetchLatest, 5000);
-    const i2 = setInterval(() => {
-      if (initializedRef.current) {
-        const sel = document.getElementById('node-select') as HTMLSelectElement | null;
-        fetchCharts(sel?.value ?? '', timeRange);
-      }
-    }, 30000);
-    return () => { clearInterval(i1); clearInterval(i2); };
-  }, [authChecked, fetchLatest, fetchCharts, timeRange]);
-
-  useEffect(() => {
-    if (chatBoxRef.current) chatBoxRef.current.scrollTop = chatBoxRef.current.scrollHeight;
-  }, [streamingState, chatHistory]);
-
-  // ── Helpers ─────────────────────────────────────────────────
-
-  const currentNode = nodes.find(n => n.node_id === selectedId);
-
-  function handleRangeChange(r: '1h' | '6h' | '24h') {
-    setTimeRange(r);
-    fetchCharts(selectedId, r);
-  }
-
-  function handleNodeChange(id: string) {
-    setSelectedId(id);
-    fetchCharts(id, timeRange);
-  }
-
-  // ── Chat ────────────────────────────────────────────────────
-
-  async function sendChat(text: string) {
-    if (!text.trim() || chatBusy) return;
-    setChatInput('');
-    setChatBusy(true);
-    setShowSuggestions(false);
-
-    const historySnapshot = chatHistory;
-    setChatHistory(prev => [...prev, { role: 'user', text }]);
-    setStreamingState({ text: '', queries: [] });
-
-    let accumulated  = '';
-    let finalQueries: { sql: string; rows: number }[] = [];
-
-    try {
-      const res = await fetch('/api/chat', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body:    JSON.stringify({ message: text, history: historySnapshot.map(m => ({ role: m.role, content: m.text })) }),
-      });
-
-      const reader  = res.body!.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n\n');
-        buffer = lines.pop() ?? '';
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          let event: Record<string, unknown>;
-          try { event = JSON.parse(line.slice(6)); } catch { continue; }
-
-          if (event.type === 'text') {
-            accumulated += event.text as string;
-            setStreamingState(prev => ({ queries: prev?.queries ?? [], text: accumulated }));
-          } else if (event.type === 'query') {
-            const q = { sql: event.sql as string, rows: event.rows as number };
-            finalQueries = [...finalQueries, q];
-            setStreamingState(prev => ({ text: prev?.text ?? '', queries: [...(prev?.queries ?? []), q] }));
-          } else if (event.type === 'done') {
-            setChatHistory(prev => [...prev, { role: 'assistant', text: (event.assistantText as string) || accumulated, queries: finalQueries }]);
-            setStreamingState(null);
-          } else if (event.type === 'error') {
-            setChatHistory(prev => [...prev, { role: 'assistant', text: `Error: ${escHtml(event.text as string)}` }]);
-            setStreamingState(null);
-          }
-        }
-      }
-    } catch (err) {
-      setChatHistory(prev => [...prev, { role: 'assistant', text: `Connection error: ${String(err)}` }]);
-      setStreamingState(null);
-    }
-
-    setChatBusy(false);
-  }
-
-  function newChat() {
-    setChatHistory([]);
-    setStreamingState(null);
-    setShowSuggestions(true);
-  }
-
-  // ── Guard: don't render until auth is confirmed ──────────────
-  if (!authChecked || !authToken) return null;
-
-  // ── Render ──────────────────────────────────────────────────
-
-  return (
-    <>
-      {/* ── Dashboard ── */}
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 24px' }}>
-
-        {/* Header */}
-        <div style={{ marginBottom: 32 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
-            <div>
-              <p style={{ fontSize: '0.72rem', fontWeight: 500, color: 'var(--txt3)', margin: '0 0 6px' }}>
-                Battery Management System
-              </p>
-              <h1 style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--txt)', margin: 0, letterSpacing: '-0.02em', lineHeight: 1 }}>
-                UEI Cloud
-              </h1>
-              {orgName && (
-                <p style={{ fontSize: '0.78rem', fontWeight: 500, color: 'var(--accent)', margin: '6px 0 0' }}>
-                  {orgName}
-                </p>
-              )}
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>
-              {lastUpdated && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                  <span className="live-dot" />
-                  <span style={{ fontSize: '0.78rem', color: 'var(--txt2)', fontWeight: 500 }}>
-                    Updated {lastUpdated}
-                  </span>
-                </div>
-              )}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                {initialized && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <label style={{ fontSize: '0.75rem', color: 'var(--txt2)', fontWeight: 500 }}>Node</label>
-                    <select
-                      id="node-select"
-                      value={selectedId}
-                      onChange={e => handleNodeChange(e.target.value)}
-                      style={{
-                        background: 'var(--surf)', border: '1px solid var(--border)',
-                        borderRadius: 6, color: 'var(--txt)',
-                        fontFamily: 'var(--ff-sans)', fontSize: '0.8rem', fontWeight: 500,
-                        padding: '5px 10px', outline: 'none', cursor: 'pointer',
-                      }}
-                    >
-                      {nodes.map(n => <option key={n.node_id} value={n.node_id}>{n.node_id}</option>)}
-                    </select>
-                  </div>
-                )}
-                <button
-                  onClick={logout}
-                  style={{
-                    background: 'transparent', border: '1px solid var(--border)',
-                    borderRadius: 6, color: 'var(--txt2)',
-                    fontFamily: 'var(--ff-sans)', fontSize: '0.75rem', fontWeight: 600,
-                    padding: '5px 12px', cursor: 'pointer', transition: 'all 0.15s',
-                  }}
-                >
-                  Sign out
-                </button>
-              </div>
-            </div>
-          </div>
-          <div style={{ height: 1, background: 'var(--border)', marginTop: 24 }} />
-        </div>
-
-        {/* Loading */}
-        {!initialized && (
-          <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--txt2)', fontSize: '0.9rem' }}>
-            Connecting to UEI Cloud…
-          </div>
-        )}
-
-        {initialized && currentNode && (
-          <>
-            {/* Fault Banner */}
-            {currentNode.fault_active && (
-              <div style={{
-                marginBottom: 24,
-                background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)',
-                borderRadius: 'var(--r)', padding: '14px 18px',
-                display: 'flex', alignItems: 'center', gap: 12,
-              }}>
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--err)', flexShrink: 0 }} />
-                <div>
-                  <p style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--err)', margin: 0 }}>
-                    Fault Active — {currentNode.bms_id}
-                  </p>
-                  <p style={{ fontSize: '0.75rem', color: 'rgba(248,113,113,0.6)', margin: '3px 0 0' }}>
-                    Last cleared {fmt(currentNode.faults_cleared_min)} minutes ago
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Telemetry */}
-            <SectionLabel>Telemetry</SectionLabel>
-            <div className="metrics-grid">
-              <MetricCard label="State of Charge" value={fmt(currentNode.soc)}              unit="%" bar={currentNode.soc}
-                highlight={currentNode.soc >= 30 ? 'normal' : currentNode.soc >= 15 ? 'warning' : 'danger'} />
-              <MetricCard label="Pack Voltage"    value={fmt(currentNode.pack_voltage)}    unit="V" />
-              <MetricCard label="Pack Current"    value={fmt(currentNode.pack_current)}    unit="A" />
-              <MetricCard label="Temp High"       value={fmt(currentNode.temp_high)}       unit="°C"
-                highlight={currentNode.temp_high > 45 ? 'danger' : 'normal'} />
-              <MetricCard label="Temp Low"        value={fmt(currentNode.temp_low)}        unit="°C" />
-              <MetricCard label="Highest Cell"    value={fmt(currentNode.highest_cell_v, 3)} unit="V" />
-              <MetricCard label="Lowest Cell"     value={fmt(currentNode.lowest_cell_v, 3)}  unit="V" />
-              <MetricCard label="CCL"             value={fmt(currentNode.ccl)}             unit="A" />
-              <MetricCard label="DCL"             value={fmt(currentNode.dcl)}             unit="A" />
-              <MetricCard label="Fault Status"    value={currentNode.fault_active ? 'Active' : 'Clear'}
-                highlight={currentNode.fault_active ? 'danger' : 'success'} />
-            </div>
-
-            {/* History */}
-            <SectionLabel>Historical Data</SectionLabel>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 16 }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--txt2)', fontWeight: 500, marginRight: 4 }}>Range</span>
-              {(['1h', '6h', '24h'] as const).map(r => (
-                <button key={r} onClick={() => handleRangeChange(r)} style={{
-                  fontFamily: 'var(--ff-sans)', fontSize: '0.78rem', fontWeight: 500,
-                  padding: '5px 14px', borderRadius: 99,
-                  background: timeRange === r ? 'var(--accent)' : 'transparent',
-                  color:      timeRange === r ? '#111' : 'var(--txt2)',
-                  border:    `1px solid ${timeRange === r ? 'var(--accent)' : 'var(--border)'}`,
-                  cursor: 'pointer', transition: 'all 0.15s',
-                }}>{r}</button>
-              ))}
-            </div>
-
-            {/* Charts */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {[
-                { title: 'State of Charge', canvasRef: socRef },
-                { title: 'Pack Voltage',    canvasRef: voltRef },
-                { title: 'Temperature',     canvasRef: tempRef },
-              ].map(({ title, canvasRef }) => (
-                <div key={title} style={{
-                  background: 'var(--surf)', border: '1px solid var(--border)',
-                  borderRadius: 'var(--r)', padding: '18px 20px',
-                }}>
-                  <p style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--txt2)', margin: '0 0 14px' }}>{title}</p>
-                  <div className="chart-container"><canvas ref={canvasRef} /></div>
-                </div>
-              ))}
-            </div>
-
-            {/* Footer */}
-            <div style={{ marginTop: 32, paddingTop: 16, borderTop: '1px solid var(--border)', textAlign: 'center', fontSize: '0.72rem', color: 'var(--txt3)', fontWeight: 500 }}>
-              UEI Cloud Platform · {currentNode.bms_id ?? '—'}
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* ── Chat Bubble ── */}
-      <button onClick={() => setChatOpen(o => !o)} title="Ask AI about your data" style={{
-        position: 'fixed', bottom: 24, right: 24, zIndex: 50,
-        width: 52, height: 52,
-        background: chatOpen ? 'var(--surf2)' : 'var(--accent)',
-        border: chatOpen ? '1px solid var(--border-hi)' : 'none',
-        borderRadius: 14, color: chatOpen ? 'var(--txt)' : '#111',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        cursor: 'pointer', transition: 'all 0.2s',
-        boxShadow: chatOpen ? 'none' : '0 4px 20px rgba(224,154,32,0.35)',
+      {/* ── Navbar ── */}
+      <nav style={{
+        position: 'sticky', top: 0, zIndex: 50,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '0 32px', height: 60,
+        background: 'rgba(17,17,17,0.85)',
+        backdropFilter: 'blur(12px)',
+        borderBottom: '1px solid var(--border)',
       }}>
-        {chatOpen ? (
-          <svg width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-            <path d="M18 6L6 18M6 6l12 12"/>
-          </svg>
-        ) : (
-          <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
-          </svg>
-        )}
-      </button>
-
-      {/* ── Chat Panel ── */}
-      {chatOpen && (
-        <div style={{
-          position: 'fixed', bottom: 88, right: 24, zIndex: 50,
-          width: 380, height: 560,
-          background: '#1a1a18', border: '1px solid var(--border)',
-          borderRadius: 14, display: 'flex', flexDirection: 'column',
-          overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.55)',
-        }}>
-          {/* Panel Header */}
-          <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <p style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--txt)', margin: 0 }}>Data Assistant</p>
-              <p style={{ fontSize: '0.72rem', color: 'var(--txt2)', margin: '2px 0 0' }}>Ask about your telemetry</p>
-            </div>
-            <button onClick={newChat} style={{
-              fontFamily: 'var(--ff-sans)', fontSize: '0.72rem', fontWeight: 600,
-              background: 'transparent', border: '1px solid var(--border)',
-              borderRadius: 6, color: 'var(--txt2)', padding: '4px 10px', cursor: 'pointer',
-            }}>New chat</button>
-          </div>
-
-          {/* Messages */}
-          <div ref={chatBoxRef} style={{ flex: 1, overflowY: 'auto', padding: '14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {showSuggestions && chatHistory.length === 0 && !streamingState && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <p style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--txt2)', textAlign: 'center', marginBottom: 4 }}>Suggestions</p>
-                {[
-                  'How many nodes are reporting?',
-                  'Show the latest SOC for all nodes',
-                  'Are there any active faults?',
-                  'What is the average pack voltage?',
-                  'Show temp trends in the last hour',
-                ].map(s => (
-                  <button key={s} className="sug-btn" onClick={() => sendChat(s)}>{s}</button>
-                ))}
-              </div>
-            )}
-
-            {chatHistory.map((msg, i) => (
-              <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
-                <div style={{
-                  maxWidth: '86%', padding: '10px 14px',
-                  fontSize: '0.82rem', lineHeight: '1.55',
-                  ...(msg.role === 'user' ? {
-                    background: 'rgba(224,154,32,0.12)', border: '1px solid rgba(224,154,32,0.2)',
-                    borderRadius: '12px 12px 3px 12px', color: 'var(--txt)',
-                  } : {
-                    background: 'var(--surf2)', border: '1px solid var(--border)',
-                    borderRadius: '3px 12px 12px 12px', color: 'var(--txt2)',
-                  }),
-                }}>
-                  {msg.role === 'assistant' && msg.queries?.map((q, qi) => <QueryBadge key={qi} q={q} />)}
-                  {msg.role === 'assistant'
-                    ? <div dangerouslySetInnerHTML={{ __html: renderMd(msg.text) }} />
-                    : msg.text}
-                </div>
-              </div>
-            ))}
-
-            {streamingState && (
-              <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
-                <div style={{
-                  maxWidth: '86%', padding: '10px 14px', fontSize: '0.82rem', lineHeight: '1.55',
-                  background: 'var(--surf2)', border: '1px solid var(--border)',
-                  borderRadius: '3px 12px 12px 12px', color: 'var(--txt2)',
-                }}>
-                  {streamingState.queries.map((q, qi) => <QueryBadge key={qi} q={q} />)}
-                  {streamingState.text
-                    ? <div dangerouslySetInnerHTML={{ __html: renderMd(streamingState.text) }} />
-                    : <span style={{ color: 'var(--txt3)', fontStyle: 'italic' }}>Thinking…</span>}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Input */}
-          <form onSubmit={e => { e.preventDefault(); sendChat(chatInput); }} style={{ display: 'flex', gap: 8, padding: '12px 14px', borderTop: '1px solid var(--border)' }}>
-            <input
-              value={chatInput}
-              onChange={e => setChatInput(e.target.value)}
-              placeholder="Ask about your data…"
-              autoComplete="off"
-              style={{
-                flex: 1, background: 'rgba(255,255,255,0.05)',
-                border: '1px solid var(--border)', borderRadius: 8,
-                color: 'var(--txt)', fontFamily: 'var(--ff-sans)',
-                fontSize: '0.85rem', padding: '8px 12px', outline: 'none',
-              }}
-            />
-            <button type="submit" disabled={chatBusy} style={{
-              background: chatBusy ? 'var(--surf2)' : 'var(--accent)',
-              color: chatBusy ? 'var(--txt2)' : '#111',
-              fontFamily: 'var(--ff-sans)', fontSize: '0.82rem', fontWeight: 600,
-              padding: '8px 14px', border: 'none', borderRadius: 8,
-              cursor: chatBusy ? 'not-allowed' : 'pointer', flexShrink: 0,
-            }}>Send</button>
-          </form>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--accent)' }} />
+          <span style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--txt)', letterSpacing: '-0.01em' }}>
+            UEI Cloud
+          </span>
         </div>
-      )}
-    </>
+        <Link href="/login" style={{
+          fontFamily: 'var(--ff-sans)', fontSize: '0.82rem', fontWeight: 600,
+          color: 'var(--txt2)', textDecoration: 'none', padding: '6px 14px',
+          border: '1px solid var(--border)', borderRadius: 8,
+          transition: 'all 0.15s',
+        }}>
+          Sign in →
+        </Link>
+      </nav>
+
+      {/* ── Hero ── */}
+      <section style={{ position: 'relative', zIndex: 1, maxWidth: 780, margin: '0 auto', padding: '96px 32px 80px', textAlign: 'center' }}>
+
+        <div className="anim-fade-up" style={{
+          display: 'inline-flex', alignItems: 'center', gap: 7,
+          background: 'rgba(224,154,32,0.1)', border: '1px solid rgba(224,154,32,0.2)',
+          borderRadius: 99, padding: '4px 14px', marginBottom: 32,
+        }}>
+          <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)' }} />
+          <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--accent)', letterSpacing: '0.04em' }}>
+            Battery Management Platform
+          </span>
+        </div>
+
+        <h1 className="anim-fade-up anim-delay-1" style={{
+          fontSize: 'clamp(2.4rem, 6vw, 3.6rem)',
+          fontWeight: 800,
+          lineHeight: 1.1,
+          letterSpacing: '-0.03em',
+          margin: '0 0 24px',
+          color: 'var(--txt)',
+        }}>
+          Monitor your batteries.{' '}
+          <span style={{ color: 'var(--accent)' }}>Stay ahead of faults.</span>
+        </h1>
+
+        <p className="anim-fade-up anim-delay-2" style={{
+          fontSize: '1.05rem', lineHeight: 1.7,
+          color: 'var(--txt2)', margin: '0 auto 40px',
+          maxWidth: 580,
+        }}>
+          UEI Cloud gives your engineering team real-time visibility into BMS telemetry —
+          live state of charge, voltage, temperature trending, fault detection, and
+          AI-powered data analysis, all in one place.
+        </p>
+
+        <div className="anim-fade-up anim-delay-3" style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+          <Link href="/login" style={{
+            display: 'inline-block',
+            padding: '12px 28px',
+            background: 'var(--accent)',
+            color: '#111',
+            borderRadius: 10,
+            fontFamily: 'var(--ff-sans)',
+            fontSize: '0.92rem',
+            fontWeight: 700,
+            textDecoration: 'none',
+            letterSpacing: '-0.01em',
+            boxShadow: '0 4px 24px rgba(224,154,32,0.3)',
+            transition: 'all 0.15s',
+          }}>
+            Get started free
+          </Link>
+          <Link href="/login" style={{
+            display: 'inline-block',
+            padding: '12px 28px',
+            background: 'transparent',
+            color: 'var(--txt)',
+            borderRadius: 10,
+            border: '1px solid var(--border)',
+            fontFamily: 'var(--ff-sans)',
+            fontSize: '0.92rem',
+            fontWeight: 600,
+            textDecoration: 'none',
+            transition: 'all 0.15s',
+          }}>
+            Sign in
+          </Link>
+        </div>
+      </section>
+
+      {/* ── Divider ── */}
+      <div style={{ maxWidth: 900, margin: '0 auto', padding: '0 32px' }}>
+        <div style={{ height: 1, background: 'linear-gradient(90deg, transparent, var(--border), transparent)' }} />
+      </div>
+
+      {/* ── Stats strip ── */}
+      <section className="anim-fade-in anim-delay-4" style={{
+        position: 'relative', zIndex: 1,
+        maxWidth: 900, margin: '0 auto',
+        padding: '40px 32px',
+        display: 'grid',
+        gridTemplateColumns: 'repeat(3, 1fr)',
+        gap: 0,
+      }}>
+        {[
+          { value: '5s',    label: 'Telemetry refresh rate' },
+          { value: 'n-org', label: 'Multi-tenant organizations' },
+          { value: 'Claude', label: 'AI-powered data assistant' },
+        ].map(({ value, label }, i) => (
+          <div key={i} style={{
+            textAlign: 'center',
+            padding: '20px 16px',
+            borderRight: i < 2 ? '1px solid var(--border)' : 'none',
+          }}>
+            <div style={{ fontFamily: 'var(--ff-mono)', fontSize: '1.5rem', fontWeight: 500, color: 'var(--txt)', marginBottom: 4 }}>
+              {value}
+            </div>
+            <div style={{ fontSize: '0.75rem', fontWeight: 500, color: 'var(--txt3)' }}>
+              {label}
+            </div>
+          </div>
+        ))}
+      </section>
+
+      {/* ── Divider ── */}
+      <div style={{ maxWidth: 900, margin: '0 auto', padding: '0 32px' }}>
+        <div style={{ height: 1, background: 'linear-gradient(90deg, transparent, var(--border), transparent)' }} />
+      </div>
+
+      {/* ── Features ── */}
+      <section style={{ position: 'relative', zIndex: 1, maxWidth: 960, margin: '0 auto', padding: '72px 32px' }}>
+        <p style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--txt2)', marginBottom: 8, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+          What's included
+        </p>
+        <h2 style={{ fontSize: 'clamp(1.5rem, 3vw, 2rem)', fontWeight: 700, color: 'var(--txt)', margin: '0 0 48px', letterSpacing: '-0.02em' }}>
+          Everything you need to monitor your fleet
+        </h2>
+
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+          gap: 16,
+        }}>
+          {features.map(({ title, desc, icon }) => (
+            <div key={title} style={{
+              background: 'var(--surf)',
+              border: '1px solid var(--border)',
+              borderRadius: 12,
+              padding: '24px 22px',
+              transition: 'border-color 0.2s, box-shadow 0.2s',
+            }}>
+              <div style={{
+                width: 40, height: 40,
+                background: 'rgba(224,154,32,0.1)',
+                border: '1px solid rgba(224,154,32,0.18)',
+                borderRadius: 10,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: 'var(--accent)',
+                marginBottom: 16,
+              }}>
+                {icon}
+              </div>
+              <h3 style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--txt)', margin: '0 0 8px', letterSpacing: '-0.01em' }}>
+                {title}
+              </h3>
+              <p style={{ fontSize: '0.8rem', lineHeight: 1.65, color: 'var(--txt2)', margin: 0 }}>
+                {desc}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── CTA Banner ── */}
+      <section style={{ position: 'relative', zIndex: 1, maxWidth: 960, margin: '0 auto 80px', padding: '0 32px' }}>
+        <div style={{
+          background: 'var(--surf)',
+          border: '1px solid var(--border)',
+          borderRadius: 16,
+          padding: '48px 40px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 24,
+          position: 'relative',
+          overflow: 'hidden',
+        }}>
+          {/* Subtle glow inside card */}
+          <div aria-hidden style={{
+            position: 'absolute', top: -60, right: -60,
+            width: 240, height: 240,
+            borderRadius: '50%',
+            background: 'radial-gradient(circle, rgba(224,154,32,0.08) 0%, transparent 70%)',
+            pointerEvents: 'none',
+          }} />
+
+          <div style={{ position: 'relative' }}>
+            <h2 style={{ fontSize: '1.35rem', fontWeight: 700, color: 'var(--txt)', margin: '0 0 8px', letterSpacing: '-0.02em' }}>
+              Ready to connect your BMS?
+            </h2>
+            <p style={{ fontSize: '0.85rem', color: 'var(--txt2)', margin: 0, lineHeight: 1.6 }}>
+              Register your organization, add your nodes, and start monitoring in minutes.
+            </p>
+          </div>
+
+          <Link href="/login" style={{
+            display: 'inline-block', flexShrink: 0,
+            padding: '11px 26px',
+            background: 'var(--accent)',
+            color: '#111',
+            borderRadius: 10,
+            fontFamily: 'var(--ff-sans)',
+            fontSize: '0.88rem', fontWeight: 700,
+            textDecoration: 'none',
+            boxShadow: '0 4px 20px rgba(224,154,32,0.25)',
+            position: 'relative',
+          }}>
+            Get started free
+          </Link>
+        </div>
+      </section>
+
+      {/* ── Footer ── */}
+      <footer style={{
+        position: 'relative', zIndex: 1,
+        borderTop: '1px solid var(--border)',
+        padding: '28px 32px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: 12,
+        maxWidth: '100%',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)', opacity: 0.7 }} />
+          <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--txt3)' }}>UEI Cloud</span>
+        </div>
+        <p style={{ fontSize: '0.72rem', color: 'var(--txt3)', margin: 0 }}>
+          Capstone Project · Unified Energy Interface · Battery Management System Monitor
+        </p>
+        <Link href="/login" style={{ fontSize: '0.78rem', color: 'var(--txt2)', textDecoration: 'none', fontWeight: 500 }}>
+          Sign in →
+        </Link>
+      </footer>
+
+    </div>
   );
 }

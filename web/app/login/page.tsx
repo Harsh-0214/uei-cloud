@@ -40,7 +40,7 @@ export default function LoginPage() {
       localStorage.setItem('uei_org_name', data.org_name);
       localStorage.setItem('uei_role',     data.role);
 
-      window.location.href = '/';
+      window.location.href = '/dashboard';
     } catch {
       setError('Network error — could not reach the server.');
     } finally {
