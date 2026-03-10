@@ -11,7 +11,10 @@ import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from passlib.context import CryptContext
+import bcrypt
 
+def hash_password(password):
+	return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 DB_HOST = os.environ.get("DB_HOST", "postgres")
 DB_PORT = int(os.environ.get("DB_PORT", "5432"))
 DB_NAME = os.environ.get("DB_NAME", "uei")

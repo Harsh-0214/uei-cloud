@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, Any
 import os
 import re
-
+import bcrypt
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from fastapi import Depends, FastAPI, HTTPException, status
@@ -39,11 +39,11 @@ def db_conn():
 pwd_ctx  = CryptContext(schemes=["bcrypt"], deprecated="auto")
 bearer   = HTTPBearer(auto_error=False)
 
-def hash_password(plain: str) -> str:
-    return pwd_ctx.hash(plain)
+def hash_password(plain, hashed):
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
-def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_ctx.verify(plain, hashed)
+def verify_password(plain, hashed):
+    return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
 
 def create_access_token(user_id: int) -> str:
     expire = datetime.now(timezone.utc) + timedelta(hours=TOKEN_EXPIRE_HOURS)
