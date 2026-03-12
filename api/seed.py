@@ -10,11 +10,11 @@ Or on the host (if Python + deps are available):
 import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from passlib.context import CryptContext
 import bcrypt
 
 def hash_password(password):
-	return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
 DB_HOST = os.environ.get("DB_HOST", "postgres")
 DB_PORT = int(os.environ.get("DB_PORT", "5432"))
 DB_NAME = os.environ.get("DB_NAME", "uei")
@@ -28,8 +28,6 @@ SUPERADMIN_ROLE     = "superadmin"
 
 # Simulator node_ids to register under the Capstone org
 SIMULATOR_NODES = ["bms-node-1", "pi_bms_1", "pi_pv_1"]
-
-pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def main():
     conn = psycopg2.connect(
@@ -57,7 +55,7 @@ def main():
             # Create or update user
             cur.execute("SELECT id, role FROM users WHERE email = %s", (SUPERADMIN_EMAIL,))
             existing = cur.fetchone()
-            hashed = pwd_ctx.hash(SUPERADMIN_PASSWORD)
+            hashed = hash_password(SUPERADMIN_PASSWORD)
 
             if existing:
                 cur.execute(
