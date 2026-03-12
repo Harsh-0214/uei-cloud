@@ -331,14 +331,14 @@ export default function Dashboard() {
   return (
     <>
       {/* ── Dashboard ── */}
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 24px' }}>
+      <div style={{ width: '100%', padding: '32px 5vw' }}>
 
         {/* Header */}
         <div style={{ marginBottom: 32 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
             <div>
               <p style={{ fontSize: '0.72rem', fontWeight: 500, color: 'var(--txt3)', margin: '0 0 6px' }}>
-                Battery Management System
+                Unified Energy Interface
               </p>
               <h1 style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--txt)', margin: 0, letterSpacing: '-0.02em', lineHeight: 1 }}>
                 UEI Cloud
@@ -461,7 +461,7 @@ export default function Dashboard() {
 
             {/* Footer */}
             <div style={{ marginTop: 32, paddingTop: 16, borderTop: '1px solid var(--border)', textAlign: 'center', fontSize: '0.72rem', color: 'var(--txt3)', fontWeight: 500 }}>
-              UEI Cloud Platform · {currentNode.bms_id ?? '—'}
+              UEI Cloud · Unified Energy Interface · {currentNode.node_id ?? '—'}
             </div>
           </>
         )}
@@ -502,7 +502,7 @@ export default function Dashboard() {
           <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
               <p style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--txt)', margin: 0 }}>Data Assistant</p>
-              <p style={{ fontSize: '0.72rem', color: 'var(--txt2)', margin: '2px 0 0' }}>Ask about your telemetry</p>
+              <p style={{ fontSize: '0.72rem', color: 'var(--txt2)', margin: '2px 0 0' }}>Ask about your energy data</p>
             </div>
             <button onClick={newChat} style={{
               fontFamily: 'var(--ff-sans)', fontSize: '0.72rem', fontWeight: 600,
@@ -521,7 +521,7 @@ export default function Dashboard() {
                   'Show the latest SOC for all nodes',
                   'Are there any active faults?',
                   'What is the average pack voltage?',
-                  'Show temp trends in the last hour',
+                  'Which node has the highest energy output?',
                 ].map(s => (
                   <button key={s} className="sug-btn" onClick={() => sendChat(s)}>{s}</button>
                 ))}
@@ -570,7 +570,7 @@ export default function Dashboard() {
             <input
               value={chatInput}
               onChange={e => setChatInput(e.target.value)}
-              placeholder="Ask about your data…"
+              placeholder="Ask about your energy data…"
               autoComplete="off"
               style={{
                 flex: 1, background: 'rgba(255,255,255,0.05)',
