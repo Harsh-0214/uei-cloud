@@ -7,7 +7,7 @@ import requests
 # CONFIG
 # =========================
 
-CLOUD_API = "http://34.130.78.82:8000"
+CLOUD_API = "http://34.130.163.154:8000"
 ENDPOINT = "/telemetry"
 
 NODE_ID = "pi_bms_1"
