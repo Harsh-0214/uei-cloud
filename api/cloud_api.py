@@ -254,45 +254,14 @@ def ingest(pkt: TelemetryPacket):
 # ── Protected data routes ────────────────────────────────────────────────────
 
 @app.get("/latest")
-def latest(
-    node_id:      Optional[str] = None,
-    current_user: dict          = Depends(get_current_user),
-) -> Any:
-    """
-    Return the most recent telemetry row(s) for the authenticated user's organization.
-    Only nodes registered to the user's org (via the nodes table) are returned.
-    """
-    org_id   = current_user["organization_id"]
-    is_super = current_user.get("role") == "superadmin"
-
-    if is_super:
-        if node_id:
-            q      = "SELECT * FROM telemetry WHERE node_id = %s ORDER BY ts_utc DESC LIMIT 1;"
-            params = (node_id,)
-        else:
-            q      = "SELECT DISTINCT ON (node_id) * FROM telemetry ORDER BY node_id, ts_utc DESC;"
-            params = None
+def latest(node_id: Optional[str] = None) -> Any:
+    """Return the most recent telemetry row(s) for all nodes."""
+    if node_id:
+        q      = "SELECT * FROM telemetry WHERE node_id = %s ORDER BY ts_utc DESC LIMIT 1;"
+        params = (node_id,)
     else:
-        if node_id:
-            q = """
-            SELECT t.*
-            FROM telemetry t
-            JOIN nodes n ON t.node_id = n.node_id
-            WHERE t.node_id = %s
-              AND n.organization_id = %s
-            ORDER BY t.ts_utc DESC
-            LIMIT 1;
-            """
-            params = (node_id, org_id)
-        else:
-            q = """
-            SELECT DISTINCT ON (t.node_id) t.*
-            FROM telemetry t
-            JOIN nodes n ON t.node_id = n.node_id
-            WHERE n.organization_id = %s
-            ORDER BY t.node_id, t.ts_utc DESC;
-            """
-            params = (org_id,)
+        q      = "SELECT DISTINCT ON (node_id) * FROM telemetry ORDER BY node_id, ts_utc DESC;"
+        params = None
 
     with db_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -300,53 +269,20 @@ def latest(
             rows = cur.fetchall()
 
     if node_id and not rows:
-        raise HTTPException(status_code=404, detail="node_id not found or not in your organization")
+        raise HTTPException(status_code=404, detail="node_id not found")
     return rows[0] if node_id else rows
 
 
 @app.get("/telemetry")
-def list_telemetry(
-    node_id:      Optional[str] = None,
-    limit:        int           = 100,
-    current_user: dict          = Depends(get_current_user),
-) -> Any:
-    """
-    Return recent telemetry rows for the authenticated user's organization.
-    Optional node_id filter. Max 1000 rows.
-    """
-    org_id   = current_user["organization_id"]
-    is_super = current_user.get("role") == "superadmin"
-    limit    = min(limit, 1000)
-
-    if is_super:
-        if node_id:
-            q      = "SELECT * FROM telemetry WHERE node_id = %s ORDER BY ts_utc DESC LIMIT %s;"
-            params = (node_id, limit)
-        else:
-            q      = "SELECT * FROM telemetry ORDER BY ts_utc DESC LIMIT %s;"
-            params = (limit,)
+def list_telemetry(node_id: Optional[str] = None, limit: int = 100) -> Any:
+    """Return recent telemetry rows for all nodes. Optional node_id filter. Max 1000 rows."""
+    limit = min(limit, 1000)
+    if node_id:
+        q      = "SELECT * FROM telemetry WHERE node_id = %s ORDER BY ts_utc DESC LIMIT %s;"
+        params = (node_id, limit)
     else:
-        if node_id:
-            q = """
-            SELECT t.*
-            FROM telemetry t
-            JOIN nodes n ON t.node_id = n.node_id
-            WHERE t.node_id = %s
-              AND n.organization_id = %s
-            ORDER BY t.ts_utc DESC
-            LIMIT %s;
-            """
-            params = (node_id, org_id, limit)
-        else:
-            q = """
-            SELECT t.*
-            FROM telemetry t
-            JOIN nodes n ON t.node_id = n.node_id
-            WHERE n.organization_id = %s
-            ORDER BY t.ts_utc DESC
-            LIMIT %s;
-            """
-            params = (org_id, limit)
+        q      = "SELECT * FROM telemetry ORDER BY ts_utc DESC LIMIT %s;"
+        params = (limit,)
 
     with db_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -357,8 +293,8 @@ def list_telemetry(
 
 
 @app.get("/schema")
-def schema(current_user: dict = Depends(get_current_user)) -> Any:
-    """Return DB schema (used by the AI chatbot). Requires auth."""
+def schema() -> Any:
+    """Return DB schema (used by the AI chatbot)."""
     q = """
     SELECT t.table_name, c.column_name, c.data_type, c.is_nullable
     FROM information_schema.tables t
@@ -397,8 +333,8 @@ class QueryRequest(BaseModel):
 
 
 @app.post("/query")
-def query(req: QueryRequest, current_user: dict = Depends(get_current_user)) -> Any:
-    """Execute a read-only SELECT query (used by the AI chatbot). Requires auth."""
+def query(req: QueryRequest) -> Any:
+    """Execute a read-only SELECT query (used by the AI chatbot)."""
     stripped = req.sql.strip()
 
     if not re.match(r"^\s*SELECT\b", stripped, re.IGNORECASE):

@@ -143,29 +143,6 @@ function MetricCard({
 // ── Dashboard ──────────────────────────────────────────────────
 
 export default function Dashboard() {
-  // ── Auth state ──────────────────────────────────────────────
-  const [authToken,   setAuthToken]   = useState<string | null>(null);
-  const [orgName,     setOrgName]     = useState('');
-  const [authChecked, setAuthChecked] = useState(false);
-
-  useEffect(() => {
-    const token = localStorage.getItem('uei_token');
-    if (!token) {
-      window.location.replace('/login');
-      return;
-    }
-    setAuthToken(token);
-    setOrgName(localStorage.getItem('uei_org_name') ?? '');
-    setAuthChecked(true);
-  }, []);
-
-  function logout() {
-    localStorage.removeItem('uei_token');
-    localStorage.removeItem('uei_org_name');
-    localStorage.removeItem('uei_role');
-    window.location.replace('/login');
-  }
-
   // ── Data state ───────────────────────────────────────────────
   const [nodes,       setNodes]       = useState<TelemetryRow[]>([]);
   const [selectedId,  setSelectedId]  = useState('');
@@ -186,12 +163,6 @@ export default function Dashboard() {
   const chartsRef      = useRef<Record<string, Chart>>({});
   const chatBoxRef     = useRef<HTMLDivElement>(null);
   const initializedRef = useRef(false);
-
-  // Build Authorization header from stored token
-  const authHeaders = useCallback((): HeadersInit => {
-    const t = localStorage.getItem('uei_token');
-    return t ? { Authorization: `Bearer ${t}` } : {};
-  }, []);
 
   // ── Charts ──────────────────────────────────────────────────
 
@@ -222,12 +193,11 @@ export default function Dashboard() {
   const fetchCharts = useCallback(async (id: string, range: string) => {
     if (!id) return;
     const base = `/api/metrics?node_id=${encodeURIComponent(id)}&range=${range}`;
-    const hdrs = authHeaders();
     try {
       const [soc, volt, temp] = await Promise.all([
-        fetch(`${base}&metric=soc`,          { cache: 'no-store', headers: hdrs }).then(r => r.json()),
-        fetch(`${base}&metric=pack_voltage`, { cache: 'no-store', headers: hdrs }).then(r => r.json()),
-        fetch(`${base}&metric=temperature`,  { cache: 'no-store', headers: hdrs }).then(r => r.json()),
+        fetch(`${base}&metric=soc`,          { cache: 'no-store' }).then(r => r.json()),
+        fetch(`${base}&metric=pack_voltage`, { cache: 'no-store' }).then(r => r.json()),
+        fetch(`${base}&metric=temperature`,  { cache: 'no-store' }).then(r => r.json()),
       ]);
       if (chartsRef.current.soc)     updateChart(chartsRef.current.soc,     soc,  [{ key: 'value', label: 'SOC',     color: '#e09a20' }]);
       if (chartsRef.current.voltage) updateChart(chartsRef.current.voltage, volt, [{ key: 'value', label: 'Voltage', color: '#a78bfa' }]);
@@ -236,21 +206,11 @@ export default function Dashboard() {
         { key: 'low',  label: 'Temp Low',  color: '#60a5fa' },
       ]);
     } catch { /* ignore */ }
-  }, [authHeaders]);
+  }, []);
 
   const fetchLatest = useCallback(async () => {
     try {
-      const resp = await fetch('/api/latest', {
-        cache: 'no-store',
-        headers: authHeaders(),
-      });
-
-      // Token expired or invalid — redirect to login
-      if (resp.status === 401) {
-        logout();
-        return;
-      }
-
+      const resp = await fetch('/api/latest', { cache: 'no-store' });
       const data = await resp.json();
       const rows: TelemetryRow[] = Array.isArray(data) ? data : [data];
       setNodes(rows);
@@ -266,10 +226,9 @@ export default function Dashboard() {
         }, 50);
       }
     } catch { /* ignore */ }
-  }, [initCharts, fetchCharts, authHeaders]);
+  }, [initCharts, fetchCharts]);
 
   useEffect(() => {
-    if (!authChecked) return;
     fetchLatest();
     const i1 = setInterval(fetchLatest, 5000);
     const i2 = setInterval(() => {
@@ -279,7 +238,7 @@ export default function Dashboard() {
       }
     }, 30000);
     return () => { clearInterval(i1); clearInterval(i2); };
-  }, [authChecked, fetchLatest, fetchCharts, timeRange]);
+  }, [fetchLatest, fetchCharts, timeRange]);
 
   useEffect(() => {
     if (chatBoxRef.current) chatBoxRef.current.scrollTop = chatBoxRef.current.scrollHeight;
@@ -317,7 +276,7 @@ export default function Dashboard() {
     try {
       const res = await fetch('/api/chat', {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ message: text, history: historySnapshot.map(m => ({ role: m.role, content: m.text })) }),
       });
 
@@ -367,9 +326,6 @@ export default function Dashboard() {
     setShowSuggestions(true);
   }
 
-  // ── Guard: don't render until auth is confirmed ──────────────
-  if (!authChecked || !authToken) return null;
-
   // ── Render ──────────────────────────────────────────────────
 
   return (
@@ -387,11 +343,6 @@ export default function Dashboard() {
               <h1 style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--txt)', margin: 0, letterSpacing: '-0.02em', lineHeight: 1 }}>
                 UEI Cloud
               </h1>
-              {orgName && (
-                <p style={{ fontSize: '0.78rem', fontWeight: 500, color: 'var(--accent)', margin: '6px 0 0' }}>
-                  {orgName}
-                </p>
-              )}
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>
@@ -422,17 +373,6 @@ export default function Dashboard() {
                     </select>
                   </div>
                 )}
-                <button
-                  onClick={logout}
-                  style={{
-                    background: 'transparent', border: '1px solid var(--border)',
-                    borderRadius: 6, color: 'var(--txt2)',
-                    fontFamily: 'var(--ff-sans)', fontSize: '0.75rem', fontWeight: 600,
-                    padding: '5px 12px', cursor: 'pointer', transition: 'all 0.15s',
-                  }}
-                >
-                  Sign out
-                </button>
               </div>
             </div>
           </div>
