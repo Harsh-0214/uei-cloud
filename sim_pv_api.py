@@ -7,7 +7,7 @@
 #   python3 sim_pv_api.py
 #
 # Verify:
-#   curl "http://34.130.78.82:8000/pv/latest?node_id=pi_pv_1"
+#   curl "http://34.130.163.154:8000/pv/latest?node_id=pi_pv_1"
 #   (or query Postgres: SELECT * FROM pv_telemetry ORDER BY ts_utc DESC LIMIT 5;)
 
 import time
@@ -15,7 +15,7 @@ import random
 from datetime import datetime, timezone
 import requests
 
-CLOUD_API = "http://34.130.78.82:8000"
+CLOUD_API = "http://34.130.163.154:8000"
 ENDPOINT = "/pv/telemetry"
 
 NODE_ID = "pi_pv_1"
