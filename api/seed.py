@@ -26,6 +26,9 @@ SUPERADMIN_EMAIL    = "capstone.uei@gmail.com"
 SUPERADMIN_PASSWORD = "capstone"
 SUPERADMIN_ROLE     = "superadmin"
 
+# Simulator node_ids to register under the Capstone org
+SIMULATOR_NODES = ["bms-node-1", "pi_bms_1", "pi_pv_1"]
+
 pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def main():
@@ -73,8 +76,20 @@ def main():
                 uid = cur.fetchone()["id"]
                 print(f"  Created user '{SUPERADMIN_EMAIL}' (id={uid}) role='{SUPERADMIN_ROLE}'")
 
+            # Register simulator nodes under the Capstone org
+            for node in SIMULATOR_NODES:
+                cur.execute(
+                    """
+                    INSERT INTO nodes (node_id, organization_id)
+                    VALUES (%s, %s)
+                    ON CONFLICT (node_id) DO NOTHING
+                    """,
+                    (node, org_id),
+                )
+                print(f"  Registered node '{node}' → org '{SUPERADMIN_ORG}'")
+
     conn.close()
-    print("Done. Superadmin account ready.")
+    print("Done. Superadmin account and simulator nodes ready.")
 
 if __name__ == "__main__":
     main()
