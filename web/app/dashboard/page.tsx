@@ -208,37 +208,41 @@ export default function Dashboard() {
     } catch { /* ignore */ }
   }, []);
 
-  const fetchLatest = useCallback(async () => {
-    try {
-      const resp = await fetch('/api/latest', { cache: 'no-store' });
-      const data = await resp.json();
-      const rows: TelemetryRow[] = Array.isArray(data) ? data : [data];
-      setNodes(rows);
-      setLastUpdated(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-
-      if (!initializedRef.current && rows.length) {
-        initializedRef.current = true;
-        setInitialized(true);
-        setSelectedId(rows[0].node_id);
-        setTimeout(() => {
-          initCharts();
-          fetchCharts(rows[0].node_id, '1h');
-        }, 50);
-      }
-    } catch { /* ignore */ }
-  }, [initCharts, fetchCharts]);
-
   useEffect(() => {
-    fetchLatest();
-    const i1 = setInterval(fetchLatest, 5000);
+    const es = new EventSource('/api/stream');
+
+    es.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (data?.error) return;
+        const rows: TelemetryRow[] = Array.isArray(data) ? data : [data];
+        if (!rows.length) return;
+        setNodes(rows);
+        setLastUpdated(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+
+        if (!initializedRef.current) {
+          initializedRef.current = true;
+          setInitialized(true);
+          setSelectedId(rows[0].node_id);
+          setTimeout(() => {
+            initCharts();
+            fetchCharts(rows[0].node_id, '1h');
+          }, 50);
+        }
+      } catch { /* ignore parse errors */ }
+    };
+
+    es.onerror = () => { /* browser auto-reconnects */ };
+
     const i2 = setInterval(() => {
       if (initializedRef.current) {
         const sel = document.getElementById('node-select') as HTMLSelectElement | null;
         fetchCharts(sel?.value ?? '', timeRange);
       }
     }, 30000);
-    return () => { clearInterval(i1); clearInterval(i2); };
-  }, [fetchLatest, fetchCharts, timeRange]);
+
+    return () => { es.close(); clearInterval(i2); };
+  }, [initCharts, fetchCharts, timeRange]);
 
   useEffect(() => {
     if (chatBoxRef.current) chatBoxRef.current.scrollTop = chatBoxRef.current.scrollHeight;

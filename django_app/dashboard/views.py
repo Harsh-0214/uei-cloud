@@ -121,6 +121,28 @@ def metrics(request):
         )
 
 
+def stream_latest(request):
+    """Proxy the FastAPI SSE stream, forwarding each chunk to the client."""
+    def generate():
+        try:
+            with requests.get(
+                f"{settings.API_URL}/stream/latest",
+                stream=True,
+                timeout=(5, None),  # 5s connect timeout, no read timeout
+            ) as resp:
+                for chunk in resp.iter_content(chunk_size=None):
+                    if chunk:
+                        yield chunk
+        except Exception as exc:
+            yield f"data: {json.dumps({'error': str(exc)})}\n\n".encode()
+
+    response = StreamingHttpResponse(generate(), content_type='text/event-stream')
+    response['Cache-Control'] = 'no-cache'
+    response['X-Accel-Buffering'] = 'no'
+    response['Connection'] = 'keep-alive'
+    return response
+
+
 def _get_schema() -> str:
     try:
         resp = requests.get(f"{settings.API_URL}/schema", timeout=5)
