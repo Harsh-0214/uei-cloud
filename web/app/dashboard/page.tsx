@@ -208,41 +208,50 @@ export default function Dashboard() {
     } catch { /* ignore */ }
   }, []);
 
+  const fetchLatest = useCallback(async () => {
+    try {
+      console.log('[UEI] Fetching latest telemetry…');
+      const resp = await fetch('/api/latest', { cache: 'no-store' });
+      if (!resp.ok) {
+        console.warn('[UEI] /api/latest returned', resp.status);
+        return;
+      }
+      const data = await resp.json();
+      const rows: TelemetryRow[] = Array.isArray(data) ? data : [data];
+      if (!rows.length) {
+        console.warn('[UEI] No telemetry rows returned — is the simulator running?');
+        return;
+      }
+      console.log('[UEI] Received', rows.length, 'node(s):', rows.map(r => r.node_id).join(', '), '| SOC:', rows[0]?.soc);
+      setNodes(rows);
+      setLastUpdated(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+
+      if (!initializedRef.current) {
+        initializedRef.current = true;
+        setInitialized(true);
+        setSelectedId(rows[0].node_id);
+        console.log('[UEI] Dashboard initialized with node:', rows[0].node_id);
+        setTimeout(() => {
+          initCharts();
+          fetchCharts(rows[0].node_id, '1h');
+        }, 50);
+      }
+    } catch (err) {
+      console.error('[UEI] fetchLatest error:', err);
+    }
+  }, [initCharts, fetchCharts]);
+
   useEffect(() => {
-    const es = new EventSource('/api/stream');
-
-    es.onmessage = (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        if (data?.error) return;
-        const rows: TelemetryRow[] = Array.isArray(data) ? data : [data];
-        if (!rows.length) return;
-        setNodes(rows);
-        setLastUpdated(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-
-        if (!initializedRef.current) {
-          initializedRef.current = true;
-          setInitialized(true);
-          setSelectedId(rows[0].node_id);
-          setTimeout(() => {
-            initCharts();
-            fetchCharts(rows[0].node_id, '1h');
-          }, 50);
-        }
-      } catch { /* ignore parse errors */ }
-    };
-
-    es.onerror = () => { /* browser auto-reconnects */ };
-
+    fetchLatest();                                   // immediate first load
+    const i1 = setInterval(fetchLatest, 1000);       // then every 1 second
     const i2 = setInterval(() => {
       if (initializedRef.current) {
         const sel = document.getElementById('node-select') as HTMLSelectElement | null;
         fetchCharts(sel?.value ?? '', timeRange);
       }
     }, 30000);
-
-    return () => { es.close(); clearInterval(i2); };
-  }, [initCharts, fetchCharts, timeRange]);
+    return () => { clearInterval(i1); clearInterval(i2); };
+  }, [fetchLatest, fetchCharts, timeRange]);
 
   useEffect(() => {
     if (chatBoxRef.current) chatBoxRef.current.scrollTop = chatBoxRef.current.scrollHeight;
