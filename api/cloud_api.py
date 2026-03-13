@@ -2,12 +2,15 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Any
+import asyncio
+import json
 import os
 import re
 import bcrypt
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
 from jose import JWTError, jwt
@@ -350,3 +353,36 @@ def query(req: QueryRequest) -> Any:
             rows = cur.fetchmany(200)
 
     return [dict(r) for r in rows]
+
+
+@app.get("/stream/latest")
+async def stream_latest():
+    """SSE endpoint — pushes the latest telemetry for all nodes every second."""
+
+    async def generate():
+        while True:
+            try:
+                def fetch():
+                    with db_conn() as conn:
+                        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                            cur.execute(
+                                "SELECT DISTINCT ON (node_id) * FROM telemetry ORDER BY node_id, ts_utc DESC"
+                            )
+                            return [dict(r) for r in cur.fetchall()]
+
+                rows = await asyncio.to_thread(fetch)
+                payload = json.dumps(rows, default=str)
+                yield f"data: {payload}\n\n"
+            except Exception:
+                pass
+            await asyncio.sleep(1)
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
