@@ -146,7 +146,7 @@ export default function Dashboard() {
   // ── Data state ───────────────────────────────────────────────
   const [nodes,       setNodes]       = useState<TelemetryRow[]>([]);
   const [selectedId,  setSelectedId]  = useState('');
-  const [timeRange,   setTimeRange]   = useState<'1h' | '6h' | '24h'>('1h');
+  const [timeRange,   setTimeRange]   = useState<'5m' | '15m' | '30m' | '1h' | '6h' | '24h'>('1h');
   const [initialized, setInitialized] = useState(false);
   const [lastUpdated, setLastUpdated] = useState('');
 
@@ -261,7 +261,7 @@ export default function Dashboard() {
 
   const currentNode = nodes.find(n => n.node_id === selectedId);
 
-  function handleRangeChange(r: '1h' | '6h' | '24h') {
+  function handleRangeChange(r: '5m' | '15m' | '30m' | '1h' | '6h' | '24h') {
     setTimeRange(r);
     fetchCharts(selectedId, r);
   }
@@ -443,7 +443,7 @@ export default function Dashboard() {
             <SectionLabel>Historical Data</SectionLabel>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 16 }}>
               <span style={{ fontSize: '0.75rem', color: 'var(--txt2)', fontWeight: 500, marginRight: 4 }}>Range</span>
-              {(['1h', '6h', '24h'] as const).map(r => (
+              {(['5m', '15m', '30m', '1h', '6h', '24h'] as const).map(r => (
                 <button key={r} onClick={() => handleRangeChange(r)} style={{
                   fontFamily: 'var(--ff-sans)', fontSize: '0.78rem', fontWeight: 500,
                   padding: '5px 14px', borderRadius: 99,
