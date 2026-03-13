@@ -221,54 +221,69 @@ export default function Dashboard() {
     } catch { /* ignore */ }
   }, []);
 
-  const fetchLatest = useCallback(async () => {
-    try {
-      console.log('[UEI] Fetching latest telemetry…');
-      const resp = await fetch('/api/latest', { cache: 'no-store' });
-      if (!resp.ok) {
-        console.warn('[UEI] /api/latest returned', resp.status);
-        return;
-      }
-      const data = await resp.json();
-      const rows: TelemetryRow[] = Array.isArray(data) ? data : [data];
-      if (!rows.length) {
-        console.warn('[UEI] No telemetry rows returned — is the simulator running?');
-        return;
-      }
-      console.log('[UEI] Received', rows.length, 'node(s):', rows.map(r => r.node_id).join(', '), '| SOC:', rows[0]?.soc);
-      setNodes(rows);
-      // Mark stale if the latest row is older than 3 seconds
-      const ageMs = rows[0]?.ts_utc ? Date.now() - new Date(rows[0].ts_utc).getTime() : Infinity;
-      setStale(ageMs > 3000);
-      setLastUpdated(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+  function parseUtcAge(ts_utc: string | undefined | null): number {
+    if (!ts_utc) return Infinity;
+    // PostgreSQL timestamps arrive as "YYYY-MM-DD HH:MM:SS[.fff]" — no timezone.
+    // Append Z so the browser treats them as UTC rather than local time.
+    const normalized = ts_utc.includes('Z') || ts_utc.includes('+')
+      ? ts_utc
+      : ts_utc.replace(' ', 'T') + 'Z';
+    return Date.now() - new Date(normalized).getTime();
+  }
 
-      if (!initializedRef.current) {
-        initializedRef.current = true;
-        setInitialized(true);
-        setSelectedId(rows[0].node_id);
-        console.log('[UEI] Dashboard initialized with node:', rows[0].node_id);
-        setTimeout(() => {
-          initCharts();
-          fetchCharts(rows[0].node_id, '1h');
-        }, 50);
-      }
-    } catch (err) {
-      console.error('[UEI] fetchLatest error:', err);
+  function applyRows(rows: TelemetryRow[]) {
+    setNodes(rows);
+    setStale(parseUtcAge(rows[0]?.ts_utc) > 3000);
+    setLastUpdated(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+    if (!initializedRef.current) {
+      initializedRef.current = true;
+      setInitialized(true);
+      setSelectedId(rows[0].node_id);
+      console.log('[UEI] Dashboard initialized with node:', rows[0].node_id);
+      setTimeout(() => {
+        initCharts();
+        fetchCharts(rows[0].node_id, '1h');
+      }, 50);
     }
-  }, [initCharts, fetchCharts]);
+  }
 
   // Keep refs in sync so intervals never have stale closures
   useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
   useEffect(() => { timeRangeRef.current  = timeRange;  }, [timeRange]);
 
   useEffect(() => {
-    fetchLatest();
-    const i1 = setInterval(fetchLatest, 500);
+    // Use SSE stream for live 1-second telemetry pushes
+    let es: EventSource | null = null;
+
+    function connect() {
+      es = new EventSource('/api/stream');
+
+      es.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.error) { console.warn('[UEI] stream error:', data.error); return; }
+          const rows: TelemetryRow[] = Array.isArray(data) ? data : [data];
+          if (!rows.length) return;
+          applyRows(rows);
+        } catch { /* ignore parse errors */ }
+      };
+
+      es.onerror = () => {
+        console.warn('[UEI] SSE disconnected — retrying in 3s');
+        es?.close();
+        setTimeout(connect, 3000);
+      };
+    }
+
+    connect();
+
     const i2 = setInterval(() => {
       if (initializedRef.current) fetchCharts(selectedIdRef.current, timeRangeRef.current);
     }, 500);
-    return () => { clearInterval(i1); clearInterval(i2); };
-  }, [fetchLatest, fetchCharts]);
+
+    return () => { es?.close(); clearInterval(i2); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (chatBoxRef.current) chatBoxRef.current.scrollTop = chatBoxRef.current.scrollHeight;
