@@ -177,14 +177,23 @@ export default function Dashboard() {
     chart: Chart,
     data: Record<string, number>[],
     lines: { key: string; label: string; color: string }[],
+    range: string,
   ) {
     if (!data?.length) return;
-    chart.data.labels = data.map(d => new Date(d.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    const shortRange = range === '5m' || range === '15m' || range === '30m';
+    chart.data.labels = data.map(d => {
+      const t = new Date(d.time);
+      return shortRange
+        ? t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+        : t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    });
     chart.data.datasets = lines.map(l => ({
       label: l.label, data: data.map(d => d[l.key]),
       borderColor: l.color, backgroundColor: l.color + '18',
       borderWidth: 2, pointRadius: 0, fill: true, tension: 0.4,
     }));
+    const maxTicks = shortRange ? 8 : range === '24h' ? 8 : 6;
+    (chart.options.scales!.x as { ticks: { maxTicksLimit: number } }).ticks.maxTicksLimit = maxTicks;
     chart.update('none');
   }
 
@@ -199,12 +208,12 @@ export default function Dashboard() {
         fetch(`${base}&metric=pack_voltage`, { cache: 'no-store' }).then(r => r.json()),
         fetch(`${base}&metric=temperature`,  { cache: 'no-store' }).then(r => r.json()),
       ]);
-      if (chartsRef.current.soc)     updateChart(chartsRef.current.soc,     soc,  [{ key: 'value', label: 'SOC',     color: '#e09a20' }]);
-      if (chartsRef.current.voltage) updateChart(chartsRef.current.voltage, volt, [{ key: 'value', label: 'Voltage', color: '#a78bfa' }]);
+      if (chartsRef.current.soc)     updateChart(chartsRef.current.soc,     soc,  [{ key: 'value', label: 'SOC',     color: '#e09a20' }], range);
+      if (chartsRef.current.voltage) updateChart(chartsRef.current.voltage, volt, [{ key: 'value', label: 'Voltage', color: '#a78bfa' }], range);
       if (chartsRef.current.temp)    updateChart(chartsRef.current.temp,    temp, [
         { key: 'high', label: 'Temp High', color: '#f87171' },
         { key: 'low',  label: 'Temp Low',  color: '#60a5fa' },
-      ]);
+      ], range);
     } catch { /* ignore */ }
   }, []);
 
