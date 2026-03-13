@@ -46,5 +46,5 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 API_URL              = os.environ.get('API_URL',              'http://34.130.163.154:8000')
 GRAFANA_URL          = os.environ.get('GRAFANA_URL',          'http://34.130.163.154:3000')
 GRAFANA_API_KEY      = os.environ.get('GRAFANA_API_KEY',      '')
-GRAFANA_DS_UID       = os.environ.get('GRAFANA_DATASOURCE_UID', '')
+GRAFANA_DS_UID       = os.environ.get('GRAFANA_DS_UID', '')
 ANTHROPIC_API_KEY    = os.environ.get('ANTHROPIC_API_KEY',    '')
