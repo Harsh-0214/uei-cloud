@@ -163,6 +163,8 @@ export default function Dashboard() {
   const chartsRef      = useRef<Record<string, Chart>>({});
   const chatBoxRef     = useRef<HTMLDivElement>(null);
   const initializedRef = useRef(false);
+  const selectedIdRef  = useRef('');
+  const timeRangeRef   = useRef<string>('1h');
 
   // ── Charts ──────────────────────────────────────────────────
 
@@ -250,17 +252,18 @@ export default function Dashboard() {
     }
   }, [initCharts, fetchCharts]);
 
+  // Keep refs in sync so intervals never have stale closures
+  useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
+  useEffect(() => { timeRangeRef.current  = timeRange;  }, [timeRange]);
+
   useEffect(() => {
-    fetchLatest();                                   // immediate first load
-    const i1 = setInterval(fetchLatest, 1000);       // then every 1 second
+    fetchLatest();
+    const i1 = setInterval(fetchLatest, 1000);
     const i2 = setInterval(() => {
-      if (initializedRef.current) {
-        const sel = document.getElementById('node-select') as HTMLSelectElement | null;
-        fetchCharts(sel?.value ?? '', timeRange);
-      }
-    }, 30000);
+      if (initializedRef.current) fetchCharts(selectedIdRef.current, timeRangeRef.current);
+    }, 500);
     return () => { clearInterval(i1); clearInterval(i2); };
-  }, [fetchLatest, fetchCharts, timeRange]);
+  }, [fetchLatest, fetchCharts]);
 
   useEffect(() => {
     if (chatBoxRef.current) chatBoxRef.current.scrollTop = chatBoxRef.current.scrollHeight;
