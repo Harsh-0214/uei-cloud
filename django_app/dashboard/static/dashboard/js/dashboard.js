@@ -298,13 +298,23 @@ function setRange(r) {
       active ? 'bg-cyan-500 text-slate-950' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
     }`;
   });
+  resetChartTimer();
   fetchCharts();
 }
 
 // ── Polling ───────────────────────────────────────────────────────────────────
+// Chart refresh interval adapts to range: fast for short ranges, slow for long ones
+const CHART_INTERVALS = { '5m': 5000, '15m': 5000, '30m': 10000, '1h': 30000, '6h': 30000, '24h': 60000 };
+let chartTimer = null;
+
+function resetChartTimer() {
+  if (chartTimer) clearInterval(chartTimer);
+  chartTimer = setInterval(fetchCharts, CHART_INTERVALS[timeRange] ?? 30000);
+}
+
 fetchLatest();
 setInterval(fetchLatest, 5000);
-setInterval(fetchCharts, 30000);
+resetChartTimer();
 
 // ── Chatbot ───────────────────────────────────────────────────────────────────
 let chatOpen    = false;

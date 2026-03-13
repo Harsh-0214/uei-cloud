@@ -52,7 +52,10 @@ def metrics(request):
     range_   = request.GET.get('range', '1h')
 
     allowed_metrics = {'soc','pack_voltage','pack_current','temp_high','temp_low','highest_cell_v','lowest_cell_v','ccl','dcl','temperature'}
-    allowed_ranges  = {'1h': '1 hour', '6h': '6 hours', '24h': '24 hours', '7d': '7 days'}
+    allowed_ranges  = {
+        '5m':  '5 minutes',  '15m': '15 minutes', '30m': '30 minutes',
+        '1h':  '1 hour',     '6h':  '6 hours',    '24h': '24 hours',
+    }
 
     is_temp = metric == 'temperature'
     if not is_temp and metric not in allowed_metrics:
