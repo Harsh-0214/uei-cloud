@@ -52,7 +52,7 @@ def metrics(request):
     range_   = request.GET.get('range', '1h')
 
     allowed_metrics = {'soc','pack_voltage','pack_current','temp_high','temp_low','highest_cell_v','lowest_cell_v','ccl','dcl','temperature'}
-    allowed_ranges  = {'1h','6h','24h','7d'}
+    allowed_ranges  = {'1h': '1 hour', '6h': '6 hours', '24h': '24 hours', '7d': '7 days'}
 
     is_temp = metric == 'temperature'
     if not is_temp and metric not in allowed_metrics:
@@ -60,63 +60,38 @@ def metrics(request):
     if range_ not in allowed_ranges:
         return JsonResponse({'error': 'Invalid range'}, status=400)
 
+    interval    = allowed_ranges[range_]
     select_cols = 'temp_high, temp_low' if is_temp else metric
-    raw_sql = f"""
-        SELECT ts_utc AS time, {select_cols}
-        FROM telemetry
-        WHERE node_id = '{node_id}'
-          AND $__timeFilter(ts_utc)
-        ORDER BY ts_utc
-        LIMIT 500
-    """
+    sql = (
+        f"SELECT ts_utc AS time, {select_cols} "
+        f"FROM telemetry "
+        f"WHERE node_id = '{node_id}' "
+        f"AND ts_utc >= NOW() - INTERVAL '{interval}' "
+        f"ORDER BY ts_utc ASC "
+        f"LIMIT 500"
+    )
 
     try:
         resp = requests.post(
-            f"{settings.GRAFANA_URL}/api/ds/query",
-            headers={
-                'Authorization': f"Bearer {settings.GRAFANA_API_KEY}",
-                'Content-Type': 'application/json',
-            },
-            json={
-                'queries': [{
-                    'datasource': {'uid': settings.GRAFANA_DS_UID, 'type': 'postgres'},
-                    'rawSql': raw_sql,
-                    'format': 'time_series',
-                    'refId': 'A',
-                    'intervalMs': 30000,
-                    'maxDataPoints': 500,
-                }],
-                'from': f"now-{range_}",
-                'to': 'now',
-            },
+            f"{settings.API_URL}/query",
+            json={'sql': sql},
             timeout=10,
         )
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=502)
 
     if not resp.ok:
-        return JsonResponse({'error': 'Grafana query failed'}, status=502)
+        return JsonResponse({'error': 'Query failed'}, status=502)
 
-    body   = resp.json()
-    result = body.get('results', {}).get('A', {})
-    frames = result.get('frames', [])
-    if not frames:
-        return JsonResponse([], safe=False)
-
-    values     = frames[0]['data']['values']
-    timestamps = values[0]
-
+    rows = resp.json()
     if is_temp:
-        highs = values[1]
-        lows  = values[2]
         return JsonResponse(
-            [{'time': t, 'high': highs[i], 'low': lows[i]} for i, t in enumerate(timestamps)],
+            [{'time': r['time'], 'high': r['temp_high'], 'low': r['temp_low']} for r in rows],
             safe=False,
         )
     else:
-        vals = values[1]
         return JsonResponse(
-            [{'time': t, 'value': vals[i]} for i, t in enumerate(timestamps)],
+            [{'time': r['time'], 'value': r[metric]} for r in rows],
             safe=False,
         )
 
