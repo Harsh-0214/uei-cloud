@@ -434,7 +434,7 @@ export default function Dashboard() {
         {initialized && currentNode && (
           <>
             {/* Fault Banner */}
-            {!stale && currentNode.fault_active && (
+            {currentNode.fault_active && (
               <div style={{
                 marginBottom: 24,
                 background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)',
@@ -454,21 +454,21 @@ export default function Dashboard() {
             )}
 
             {/* Telemetry */}
-            <SectionLabel>Telemetry{stale && <span style={{ marginLeft: 10, fontSize: '0.68rem', color: 'var(--txt3)', fontWeight: 400 }}>— no live data</span>}</SectionLabel>
+            <SectionLabel>Telemetry{stale && <span style={{ marginLeft: 10, fontSize: '0.68rem', color: 'var(--txt3)', fontWeight: 400 }}>— last known data</span>}</SectionLabel>
             <div className="metrics-grid">
-              <MetricCard label="State of Charge" value={stale ? '—' : fmt(currentNode.soc)}              unit={stale ? '' : '%'} bar={stale ? null : currentNode.soc}
-                highlight={stale ? 'normal' : currentNode.soc >= 30 ? 'normal' : currentNode.soc >= 15 ? 'warning' : 'danger'} />
-              <MetricCard label="Pack Voltage"    value={stale ? '—' : fmt(currentNode.pack_voltage)}    unit={stale ? '' : 'V'} />
-              <MetricCard label="Pack Current"    value={stale ? '—' : fmt(currentNode.pack_current)}    unit={stale ? '' : 'A'} />
-              <MetricCard label="Temp High"       value={stale ? '—' : fmt(currentNode.temp_high)}       unit={stale ? '' : '°C'}
-                highlight={stale ? 'normal' : currentNode.temp_high > 45 ? 'danger' : 'normal'} />
-              <MetricCard label="Temp Low"        value={stale ? '—' : fmt(currentNode.temp_low)}        unit={stale ? '' : '°C'} />
-              <MetricCard label="Highest Cell"    value={stale ? '—' : fmt(currentNode.highest_cell_v, 3)} unit={stale ? '' : 'V'} />
-              <MetricCard label="Lowest Cell"     value={stale ? '—' : fmt(currentNode.lowest_cell_v, 3)}  unit={stale ? '' : 'V'} />
-              <MetricCard label="CCL"             value={stale ? '—' : fmt(currentNode.ccl)}             unit={stale ? '' : 'A'} />
-              <MetricCard label="DCL"             value={stale ? '—' : fmt(currentNode.dcl)}             unit={stale ? '' : 'A'} />
-              <MetricCard label="Fault Status"    value={stale ? '—' : currentNode.fault_active ? 'Active' : 'Clear'}
-                highlight={stale ? 'normal' : currentNode.fault_active ? 'danger' : 'success'} />
+              <MetricCard label="State of Charge" value={fmt(currentNode.soc)}              unit="%" bar={currentNode.soc}
+                highlight={currentNode.soc >= 30 ? 'normal' : currentNode.soc >= 15 ? 'warning' : 'danger'} />
+              <MetricCard label="Pack Voltage"    value={fmt(currentNode.pack_voltage)}    unit="V" />
+              <MetricCard label="Pack Current"    value={fmt(currentNode.pack_current)}    unit="A" />
+              <MetricCard label="Temp High"       value={fmt(currentNode.temp_high)}       unit="°C"
+                highlight={currentNode.temp_high > 45 ? 'danger' : 'normal'} />
+              <MetricCard label="Temp Low"        value={fmt(currentNode.temp_low)}        unit="°C" />
+              <MetricCard label="Highest Cell"    value={fmt(currentNode.highest_cell_v, 3)} unit="V" />
+              <MetricCard label="Lowest Cell"     value={fmt(currentNode.lowest_cell_v, 3)}  unit="V" />
+              <MetricCard label="CCL"             value={fmt(currentNode.ccl)}             unit="A" />
+              <MetricCard label="DCL"             value={fmt(currentNode.dcl)}             unit="A" />
+              <MetricCard label="Fault Status"    value={currentNode.fault_active ? 'Active' : 'Clear'}
+                highlight={currentNode.fault_active ? 'danger' : 'success'} />
             </div>
 
             {/* History */}
