@@ -196,6 +196,23 @@ def me(current_user: dict = Depends(get_current_user)):
 
 # ── Admin routes ─────────────────────────────────────────────────────────────
 
+@app.get("/admin/users")
+def list_users(current_user: dict = Depends(get_current_user)) -> Any:
+    """Return all users with their org name. Any authenticated user can view."""
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT u.id, u.email, u.role, o.name AS org_name, u.organization_id
+                FROM users u
+                JOIN organizations o ON u.organization_id = o.id
+                ORDER BY o.name, u.email
+                """
+            )
+            rows = cur.fetchall()
+    return [dict(r) for r in rows]
+
+
 @app.post("/admin/nodes", status_code=201)
 def register_node(req: NodeRegisterRequest, _admin: dict = Depends(require_admin)):
     """

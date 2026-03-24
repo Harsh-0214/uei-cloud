@@ -7,6 +7,13 @@ Chart.register(...registerables);
 
 // ── Types ──────────────────────────────────────────────────────
 
+interface CurrentUser {
+  id: number;
+  email: string;
+  role: string;
+  org_name: string;
+}
+
 interface TelemetryRow {
   node_id: string;
   bms_id: string;
@@ -145,6 +152,7 @@ function MetricCard({
 
 export default function Dashboard() {
   // ── Data state ───────────────────────────────────────────────
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [nodes,       setNodes]       = useState<TelemetryRow[]>([]);
   const [selectedId,  setSelectedId]  = useState('');
   const [timeRange,   setTimeRange]   = useState<'5m' | '15m' | '30m' | '1h' | '6h' | '24h'>('1h');
@@ -246,6 +254,14 @@ export default function Dashboard() {
       }, 50);
     }
   }
+
+  // Fetch current user on mount
+  useEffect(() => {
+    fetch('/api/auth/me', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setCurrentUser(data); })
+      .catch(() => {});
+  }, []);
 
   // Keep refs in sync so intervals never have stale closures
   useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
@@ -398,6 +414,32 @@ export default function Dashboard() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>
+              {/* User + org pill */}
+              {currentUser && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--txt)' }}>
+                      {currentUser.email}
+                    </div>
+                    <div style={{ fontSize: '0.68rem', color: 'var(--txt3)', marginTop: 1 }}>
+                      {currentUser.org_name} · <span style={{ color: 'var(--accent)', textTransform: 'capitalize' }}>{currentUser.role}</span>
+                    </div>
+                  </div>
+                  <a
+                    href="/users"
+                    title="View all users"
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      width: 30, height: 30, borderRadius: '50%',
+                      background: 'var(--surf2)', border: '1px solid var(--border)',
+                      color: 'var(--txt2)', textDecoration: 'none', fontSize: '0.75rem',
+                      fontWeight: 700, flexShrink: 0,
+                    }}
+                  >
+                    {currentUser.email[0].toUpperCase()}
+                  </a>
+                </div>
+              )}
               {lastUpdated && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                   <span className="live-dot" />
