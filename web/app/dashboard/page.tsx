@@ -289,6 +289,13 @@ export default function Dashboard() {
     if (chatBoxRef.current) chatBoxRef.current.scrollTop = chatBoxRef.current.scrollHeight;
   }, [streamingState, chatHistory]);
 
+  // ── Auth ────────────────────────────────────────────────────
+
+  async function handleLogout() {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    window.location.href = '/login';
+  }
+
   // ── Helpers ─────────────────────────────────────────────────
 
   const currentNode = nodes.find(n => n.node_id === selectedId);
@@ -389,6 +396,18 @@ export default function Dashboard() {
                 UEI Cloud
               </h1>
             </div>
+
+            <button
+              onClick={handleLogout}
+              style={{
+                fontFamily: 'var(--ff-sans)', fontSize: '0.78rem', fontWeight: 600,
+                background: 'transparent', border: '1px solid var(--border)',
+                borderRadius: 8, color: 'var(--txt2)', padding: '7px 16px',
+                cursor: 'pointer', transition: 'all 0.15s',
+              }}
+            >
+              Sign out
+            </button>
 
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>
               {lastUpdated && (

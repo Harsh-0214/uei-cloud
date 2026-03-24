@@ -10,6 +10,7 @@ import bcrypt
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
@@ -17,6 +18,14 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 
 app = FastAPI(title="UEI Cloud API", version="2.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://uei-cloud.vercel.app", "http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # ── Config ──────────────────────────────────────────────────────────────────
 

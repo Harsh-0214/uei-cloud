@@ -35,11 +35,7 @@ export default function LoginPage() {
         return;
       }
 
-      // Store token + org name for the dashboard
-      localStorage.setItem('uei_token',    data.access_token);
-      localStorage.setItem('uei_org_name', data.org_name);
-      localStorage.setItem('uei_role',     data.role);
-
+      // Cookie is set by the API route (httpOnly) — just redirect
       window.location.href = '/dashboard';
     } catch {
       setError('Network error — could not reach the server.');
