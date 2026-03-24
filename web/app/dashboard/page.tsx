@@ -682,7 +682,7 @@ export default function Dashboard() {
                         {label}
                       </div>
                       {node ? (
-                        <div className="metrics-grid" style={{ padding: 12 }}>
+                        <div className="metrics-grid-compact" style={{ padding: 12 }}>
                           <MetricCard label="SOC"          value={fmt(node.soc)}              unit="%" bar={node.soc}
                             highlight={node.soc >= 30 ? 'normal' : node.soc >= 15 ? 'warning' : 'danger'} />
                           <MetricCard label="Pack Voltage"  value={fmt(node.pack_voltage)}    unit="V" />
