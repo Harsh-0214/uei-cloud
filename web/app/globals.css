@@ -42,14 +42,18 @@ body {
 @media (min-width: 640px)  { .metrics-grid { grid-template-columns: repeat(3, 1fr); } }
 @media (min-width: 1024px) { .metrics-grid { grid-template-columns: repeat(5, 1fr); } }
 
-/* Compact variant used inside compare panels (max 2 cols → 3 cols at wide) */
+/* Compact variant used inside compare panels — scrollable if cards don't fit */
+.metrics-grid-compact-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
 .metrics-grid-compact {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(5, minmax(130px, 1fr));
   gap: 8px;
   margin-bottom: 0;
+  min-width: 650px; /* guarantees cards stay readable; container scrolls */
 }
-@media (min-width: 1280px) { .metrics-grid-compact { grid-template-columns: repeat(3, 1fr); } }
 
 /* ── Metric card ── */
 .mc {

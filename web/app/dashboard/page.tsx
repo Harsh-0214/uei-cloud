@@ -682,20 +682,22 @@ export default function Dashboard() {
                         {label}
                       </div>
                       {node ? (
-                        <div className="metrics-grid-compact" style={{ padding: 12 }}>
-                          <MetricCard label="SOC"          value={fmt(node.soc)}              unit="%" bar={node.soc}
-                            highlight={node.soc >= 30 ? 'normal' : node.soc >= 15 ? 'warning' : 'danger'} />
-                          <MetricCard label="Pack Voltage"  value={fmt(node.pack_voltage)}    unit="V" />
-                          <MetricCard label="Pack Current"  value={fmt(node.pack_current)}    unit="A" />
-                          <MetricCard label="Temp High"     value={fmt(node.temp_high)}       unit="°C"
-                            highlight={node.temp_high > 45 ? 'danger' : 'normal'} />
-                          <MetricCard label="Temp Low"      value={fmt(node.temp_low)}        unit="°C" />
-                          <MetricCard label="Highest Cell"  value={fmt(node.highest_cell_v, 3)} unit="V" />
-                          <MetricCard label="Lowest Cell"   value={fmt(node.lowest_cell_v, 3)}  unit="V" />
-                          <MetricCard label="CCL"           value={fmt(node.ccl)}             unit="A" />
-                          <MetricCard label="DCL"           value={fmt(node.dcl)}             unit="A" />
-                          <MetricCard label="Fault"         value={node.fault_active ? 'Active' : 'Clear'}
-                            highlight={node.fault_active ? 'danger' : 'success'} />
+                        <div className="metrics-grid-compact-scroll" style={{ padding: 12 }}>
+                          <div className="metrics-grid-compact">
+                            <MetricCard label="SOC"          value={fmt(node.soc)}              unit="%" bar={node.soc}
+                              highlight={node.soc >= 30 ? 'normal' : node.soc >= 15 ? 'warning' : 'danger'} />
+                            <MetricCard label="Pack Voltage"  value={fmt(node.pack_voltage)}    unit="V" />
+                            <MetricCard label="Pack Current"  value={fmt(node.pack_current)}    unit="A" />
+                            <MetricCard label="Temp High"     value={fmt(node.temp_high)}       unit="°C"
+                              highlight={node.temp_high > 45 ? 'danger' : 'normal'} />
+                            <MetricCard label="Temp Low"      value={fmt(node.temp_low)}        unit="°C" />
+                            <MetricCard label="Highest Cell"  value={fmt(node.highest_cell_v, 3)} unit="V" />
+                            <MetricCard label="Lowest Cell"   value={fmt(node.lowest_cell_v, 3)}  unit="V" />
+                            <MetricCard label="CCL"           value={fmt(node.ccl)}             unit="A" />
+                            <MetricCard label="DCL"           value={fmt(node.dcl)}             unit="A" />
+                            <MetricCard label="Fault"         value={node.fault_active ? 'Active' : 'Clear'}
+                              highlight={node.fault_active ? 'danger' : 'success'} />
+                          </div>
                         </div>
                       ) : (
                         <div style={{ padding: 24, fontSize: '0.82rem', color: 'var(--txt3)', textAlign: 'center' }}>No data</div>
