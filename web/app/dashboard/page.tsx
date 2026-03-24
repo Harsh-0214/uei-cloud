@@ -295,7 +295,7 @@ export default function Dashboard() {
 
     const i2 = setInterval(() => {
       if (initializedRef.current) fetchCharts(selectedIdRef.current, timeRangeRef.current);
-    }, 500);
+    }, 5000);
 
     return () => { es?.close(); clearInterval(i2); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
