@@ -101,9 +101,12 @@ const CHART_DEFAULTS = {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--txt2)', marginBottom: 14 }}>
-      {children}
-    </p>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+      <div style={{ width: 3, height: 14, borderRadius: 99, background: 'var(--accent)', flexShrink: 0 }} />
+      <p style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--txt2)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.09em' }}>
+        {children}
+      </p>
+    </div>
   );
 }
 
@@ -493,25 +496,34 @@ export default function Dashboard() {
 
         {/* Header */}
         <div style={{ marginBottom: 32 }}>
+          {/* Top accent bar */}
+          <div style={{ height: 3, background: 'linear-gradient(90deg, var(--accent) 0%, rgba(224,154,32,0.15) 60%, transparent 100%)', borderRadius: 99, marginBottom: 24 }} />
+
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
+            {/* Brand + page badge */}
             <div>
-              <p style={{ fontSize: '0.72rem', fontWeight: 500, color: 'var(--txt3)', margin: '0 0 6px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                <h1 style={{ fontSize: '1.85rem', fontWeight: 800, margin: 0, letterSpacing: '-0.03em', lineHeight: 1, background: 'linear-gradient(135deg, #e8e8e6 30%, #88887e 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                  UEI Cloud
+                </h1>
+                <span style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#111', background: 'var(--accent)', padding: '3px 8px', borderRadius: 4 }}>
+                  Dashboard
+                </span>
+              </div>
+              <p style={{ fontSize: '0.72rem', fontWeight: 500, color: 'var(--txt3)', margin: 0 }}>
                 Unified Energy Interface
               </p>
-              <h1 style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--txt)', margin: 0, letterSpacing: '-0.02em', lineHeight: 1 }}>
-                UEI Cloud
-              </h1>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>
-              {/* User + org pill */}
+              {/* User + org */}
               {currentUser && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--txt)' }}>
                       {currentUser.email}
                     </div>
-                    <div style={{ fontSize: '0.68rem', color: 'var(--txt3)', marginTop: 1 }}>
+                    <div style={{ fontSize: '0.68rem', color: 'var(--txt3)', marginTop: 2 }}>
                       {currentUser.org_name} · <span style={{ color: 'var(--accent)', textTransform: 'capitalize' }}>{currentUser.role}</span>
                     </div>
                   </div>
@@ -520,9 +532,10 @@ export default function Dashboard() {
                     title="View all users"
                     style={{
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      width: 30, height: 30, borderRadius: '50%',
-                      background: 'var(--surf2)', border: '1px solid var(--border)',
-                      color: 'var(--txt2)', textDecoration: 'none', fontSize: '0.75rem',
+                      width: 32, height: 32, borderRadius: '50%',
+                      background: 'linear-gradient(135deg, var(--surf2), var(--surf))',
+                      border: '1px solid var(--border-hi)',
+                      color: 'var(--txt)', textDecoration: 'none', fontSize: '0.78rem',
                       fontWeight: 700, flexShrink: 0,
                     }}
                   >
@@ -530,35 +543,23 @@ export default function Dashboard() {
                   </a>
                 </div>
               )}
-              {lastUpdated && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              {/* Live status + nav */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {lastUpdated && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.15)', borderRadius: 20 }}>
                     <span className="live-dot" />
-                    <span style={{ fontSize: '0.78rem', color: 'var(--txt2)', fontWeight: 500 }}>
-                      Updated {lastUpdated}
+                    <span style={{ fontSize: '0.72rem', color: '#4ade80', fontWeight: 600 }}>
+                      {lastUpdated}
                     </span>
                   </div>
-                  <a
-                    href="/logs"
-                    style={{
-                      fontSize: '0.75rem', fontWeight: 600, color: 'var(--txt2)',
-                      textDecoration: 'none', padding: '3px 10px',
-                      border: '1px solid var(--border)', borderRadius: 6,
-                      background: 'transparent', transition: 'all 0.15s',
-                    }}
-                    onMouseEnter={e => {
-                      (e.currentTarget as HTMLAnchorElement).style.color = 'var(--txt)';
-                      (e.currentTarget as HTMLAnchorElement).style.borderColor = 'var(--border-hi)';
-                    }}
-                    onMouseLeave={e => {
-                      (e.currentTarget as HTMLAnchorElement).style.color = 'var(--txt2)';
-                      (e.currentTarget as HTMLAnchorElement).style.borderColor = 'var(--border)';
-                    }}
-                  >
-                    Logs
-                  </a>
-                </div>
-              )}
+                )}
+                <a href="/logs" style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--txt2)', textDecoration: 'none', padding: '4px 12px', border: '1px solid var(--border)', borderRadius: 20, transition: 'all 0.15s' }}
+                  onMouseEnter={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.color='var(--txt)'; a.style.borderColor='var(--border-hi)'; }}
+                  onMouseLeave={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.color='var(--txt2)'; a.style.borderColor='var(--border)'; }}>
+                  Logs
+                </a>
+              </div>
+              {/* Controls row */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 {initialized && (
                   <>
@@ -620,18 +621,6 @@ export default function Dashboard() {
                   </>
                 )}
               </div>
-              <button
-                onClick={handleLogout}
-                style={{
-                  alignSelf: 'flex-end',
-                  fontFamily: 'var(--ff-sans)', fontSize: '0.75rem', fontWeight: 600,
-                  background: 'transparent', border: '1px solid var(--border)',
-                  borderRadius: 6, color: 'var(--txt3)', padding: '5px 12px',
-                  cursor: 'pointer', transition: 'all 0.15s',
-                }}
-              >
-                Sign out
-              </button>
             </div>
           </div>
           <div style={{ height: 1, background: 'var(--border)', marginTop: 24 }} />
@@ -699,8 +688,9 @@ export default function Dashboard() {
                     { node: cmpNode,     label: compareId,  accent: '#38bdf8', border: 'rgba(56,189,248,0.25)',  bg: 'rgba(56,189,248,0.06)'  },
                   ].map(({ node, label, accent, border, bg }) => (
                     <div key={label} style={{ border: `1px solid ${border}`, borderRadius: 'var(--r)', overflow: 'hidden' }}>
-                      <div style={{ padding: '9px 16px', background: bg, borderBottom: `1px solid ${border}`, fontSize: '0.75rem', fontWeight: 700, color: accent, letterSpacing: '0.01em' }}>
-                        {label}
+                      <div style={{ padding: '10px 16px', background: bg, borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: accent, flexShrink: 0, display: 'inline-block', boxShadow: `0 0 8px ${accent}` }} />
+                        <span style={{ fontSize: '0.78rem', fontWeight: 700, color: accent, fontFamily: 'var(--ff-mono)', letterSpacing: '0.02em' }}>{label}</span>
                       </div>
                       {node ? (
                         <div className="metrics-grid-compact-scroll" style={{ padding: 12 }}>
@@ -763,11 +753,26 @@ export default function Dashboard() {
             </div>
 
             {/* Footer */}
-            <div style={{ marginTop: 32, paddingTop: 16, borderTop: '1px solid var(--border)', textAlign: 'center', fontSize: '0.72rem', color: 'var(--txt3)', fontWeight: 500 }}>
-              UEI Cloud · Unified Energy Interface ·{' '}
-              {compareMode
-                ? <><span style={{ color: '#e09a20' }}>{selectedId}</span> vs <span style={{ color: '#38bdf8' }}>{compareId}</span></>
-                : currentNode.node_id ?? '—'}
+            <div style={{ marginTop: 40, paddingTop: 20, borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+              <span style={{ fontSize: '0.72rem', color: 'var(--txt3)', fontWeight: 500 }}>
+                UEI Cloud · Unified Energy Interface ·{' '}
+                {compareMode
+                  ? <><span style={{ color: '#e09a20' }}>{selectedId}</span> vs <span style={{ color: '#38bdf8' }}>{compareId}</span></>
+                  : currentNode.node_id ?? '—'}
+              </span>
+              <button
+                onClick={handleLogout}
+                style={{
+                  fontFamily: 'var(--ff-sans)', fontSize: '0.72rem', fontWeight: 600,
+                  background: 'transparent', border: '1px solid var(--border)',
+                  borderRadius: 6, color: 'var(--txt3)', padding: '5px 14px',
+                  cursor: 'pointer', transition: 'all 0.15s',
+                }}
+                onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.color='var(--err)'; b.style.borderColor='rgba(248,113,113,0.3)'; }}
+                onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.color='var(--txt3)'; b.style.borderColor='var(--border)'; }}
+              >
+                Sign out
+              </button>
             </div>
           </>
         )}
