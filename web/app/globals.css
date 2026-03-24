@@ -27,8 +27,8 @@
 /* ── Light mode overrides ── */
 html.light {
   --bg:            #c8c3ba;
-  --surf:          #dbd7cf;
-  --surf2:         #ccc8bf;
+  --surf:          #f0ece4;
+  --surf2:         #e4e0d8;
   --border:        rgba(0, 0, 0, 0.13);
   --border-hi:     rgba(0, 0, 0, 0.24);
   --accent:        #b8720c;
