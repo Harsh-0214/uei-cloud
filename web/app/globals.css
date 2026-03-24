@@ -26,21 +26,21 @@
 
 /* ── Light mode overrides ── */
 html.light {
-  --bg:            #f5f4f0;
-  --surf:          #ffffff;
-  --surf2:         #eceae3;
-  --border:        rgba(0, 0, 0, 0.09);
-  --border-hi:     rgba(0, 0, 0, 0.18);
-  --accent:        #c97e12;
-  --accent-soft:   rgba(201, 126, 18, 0.1);
-  --ok:            #16a34a;
-  --warn:          #ea580c;
-  --err:           #dc2626;
-  --txt:           #1c1c1a;
-  --txt2:          #6b6b62;
-  --txt3:          #9e9e94;
-  --title-grad:    linear-gradient(135deg, #1c1c1a 30%, #6b6b62 100%);
-  --shadow-card:   0 4px 20px rgba(0, 0, 0, 0.08);
+  --bg:            #c8c3ba;
+  --surf:          #dbd7cf;
+  --surf2:         #ccc8bf;
+  --border:        rgba(0, 0, 0, 0.13);
+  --border-hi:     rgba(0, 0, 0, 0.24);
+  --accent:        #b8720c;
+  --accent-soft:   rgba(184, 114, 12, 0.12);
+  --ok:            #15803d;
+  --warn:          #c2410c;
+  --err:           #b91c1c;
+  --txt:           #1a1915;
+  --txt2:          #5a564e;
+  --txt3:          #8a8780;
+  --title-grad:    linear-gradient(135deg, #1a1915 30%, #5a564e 100%);
+  --shadow-card:   0 4px 20px rgba(0, 0, 0, 0.12);
 }
 
 * { box-sizing: border-box; }
