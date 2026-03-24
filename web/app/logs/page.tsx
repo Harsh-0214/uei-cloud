@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import ThemeToggle from '../components/ThemeToggle';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -224,76 +225,90 @@ export default function LogsPage() {
       {/* Header */}
       <div style={{ marginBottom: 28 }}>
         {/* Top accent bar */}
-        <div style={{ height: 3, background: 'linear-gradient(90deg, #88887e 0%, rgba(136,136,126,0.1) 60%, transparent 100%)', borderRadius: 99, marginBottom: 24 }} />
+        <div style={{ height: 3, background: 'linear-gradient(90deg, var(--txt2) 0%, rgba(128,128,120,0.1) 60%, transparent 100%)', borderRadius: 99, marginBottom: 24 }} />
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
           {/* Brand + page badge */}
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-              <h1 style={{ fontSize: '1.85rem', fontWeight: 800, margin: 0, letterSpacing: '-0.03em', lineHeight: 1, background: 'linear-gradient(135deg, #e8e8e6 30%, #88887e 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+              <h1 style={{ fontSize: '1.85rem', fontWeight: 800, margin: 0, letterSpacing: '-0.03em', lineHeight: 1, background: 'var(--title-grad)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
                 UEI Cloud
               </h1>
-              <span style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#e8e8e6', background: '#252523', border: '1px solid rgba(255,255,255,0.12)', padding: '3px 8px', borderRadius: 4 }}>
+              <span style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--txt)', background: 'var(--surf2)', border: '1px solid var(--border-hi)', padding: '3px 8px', borderRadius: 4 }}>
                 Logs
               </span>
             </div>
-            <p style={{ fontSize: '0.72rem', fontWeight: 500, color: '#454540', margin: 0 }}>
+            <p style={{ fontSize: '0.72rem', fontWeight: 500, color: 'var(--txt3)', margin: 0 }}>
               Unified Energy Interface
             </p>
           </div>
 
-          {/* Right: user + nav */}
+          {/* Right: user + theme toggle */}
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
             {user && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#e8e8e6' }}>{user.email}</div>
-                  <div style={{ fontSize: '0.68rem', color: '#454540', marginTop: 2 }}>
-                    {user.org_name} · <span style={{ color: '#e09a20', textTransform: 'capitalize' }}>{user.role}</span>
+                  <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--txt)' }}>{user.email}</div>
+                  <div style={{ fontSize: '0.68rem', color: 'var(--txt3)', marginTop: 2 }}>
+                    {user.org_name} · <span style={{ color: 'var(--accent)', textTransform: 'capitalize' }}>{user.role}</span>
                   </div>
                 </div>
+                <ThemeToggle />
               </div>
             )}
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <a href="/dashboard" style={{ fontSize: '0.75rem', fontWeight: 600, color: '#88887e', textDecoration: 'none', padding: '4px 12px', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 20, transition: 'all 0.15s' }}
-                onMouseEnter={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.color='#e8e8e6'; a.style.borderColor='rgba(255,255,255,0.2)'; }}
-                onMouseLeave={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.color='#88887e'; a.style.borderColor='rgba(255,255,255,0.08)'; }}>
-                ← Dashboard
-              </a>
-              <a href="/users" style={{ fontSize: '0.75rem', fontWeight: 600, color: '#88887e', textDecoration: 'none', padding: '4px 12px', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 20, transition: 'all 0.15s' }}
-                onMouseEnter={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.color='#e8e8e6'; a.style.borderColor='rgba(255,255,255,0.2)'; }}
-                onMouseLeave={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.color='#88887e'; a.style.borderColor='rgba(255,255,255,0.08)'; }}>
-                Users
-              </a>
-            </div>
           </div>
         </div>
 
-        <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', marginTop: 24 }} />
+        {/* Centred nav buttons */}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginTop: 20 }}>
+          {[
+            { href: '/dashboard', label: '← Dashboard' },
+            { href: '/users',     label: 'Users' },
+          ].map(({ href, label }) => (
+            <a
+              key={href}
+              href={href}
+              style={{
+                fontSize: '0.88rem', fontWeight: 600,
+                color: 'var(--txt2)', textDecoration: 'none',
+                padding: '10px 28px',
+                border: '1px solid var(--border)', borderRadius: 99,
+                background: 'var(--surf)',
+                transition: 'all 0.15s',
+              }}
+              onMouseEnter={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.color='var(--txt)'; a.style.borderColor='var(--border-hi)'; a.style.background='var(--surf2)'; }}
+              onMouseLeave={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.color='var(--txt2)'; a.style.borderColor='var(--border)'; a.style.background='var(--surf)'; }}
+            >
+              {label}
+            </a>
+          ))}
+        </div>
+
+        <div style={{ height: 1, background: 'var(--border)', marginTop: 20 }} />
       </div>
 
       {/* Controls bar */}
       <div style={{
         display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 20,
         padding: '14px 18px',
-        background: '#1c1c1a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10,
+        background: 'var(--surf)', border: '1px solid var(--border)', borderRadius: 10,
       }}>
         {/* Range */}
-        <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#454540', marginRight: 4 }}>RANGE</span>
+        <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--txt3)', marginRight: 4 }}>RANGE</span>
         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
           {RANGES.map(r => btn(r, range === r, () => setRange(r)))}
         </div>
 
-        <div style={{ width: 1, height: 20, background: 'rgba(255,255,255,0.08)', margin: '0 4px' }} />
+        <div style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 4px' }} />
 
         {/* Node filter */}
-        <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#454540' }}>NODE</span>
+        <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--txt3)' }}>NODE</span>
         <select
           value={nodeFilter}
           onChange={e => setNode(e.target.value)}
           style={{
-            background: '#252523', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6,
-            color: '#e8e8e6', fontSize: '0.78rem', padding: '4px 10px',
+            background: 'var(--surf2)', border: '1px solid var(--border)', borderRadius: 6,
+            color: 'var(--txt)', fontSize: '0.78rem', padding: '4px 10px',
             fontFamily: "'DM Mono', monospace", cursor: 'pointer',
           }}
         >
@@ -311,9 +326,9 @@ export default function LogsPage() {
           style={{
             display: 'flex', alignItems: 'center', gap: 7,
             padding: '6px 16px', borderRadius: 6,
-            border: '1px solid rgba(224,154,32,0.4)',
-            background: exporting ? 'rgba(224,154,32,0.05)' : 'rgba(224,154,32,0.12)',
-            color: exporting ? '#88887e' : '#e09a20',
+            border: '1px solid rgba(201,126,18,0.4)',
+            background: exporting ? 'var(--accent-soft)' : 'var(--accent-soft)',
+            color: exporting ? 'var(--txt3)' : 'var(--accent)',
             fontSize: '0.78rem', fontWeight: 700,
             cursor: exporting || rows.length === 0 ? 'not-allowed' : 'pointer',
             transition: 'all 0.15s',
@@ -336,16 +351,16 @@ export default function LogsPage() {
           { label: 'Last refresh',  value: lastFetch || '…' },
         ].map(p => (
           <div key={p.label} style={{
-            padding: '8px 14px', background: '#1c1c1a',
-            border: `1px solid ${p.danger ? 'rgba(248,113,113,0.3)' : 'rgba(255,255,255,0.07)'}`,
+            padding: '8px 14px', background: 'var(--surf)',
+            border: `1px solid ${p.danger ? 'rgba(220,38,38,0.25)' : 'var(--border)'}`,
             borderRadius: 8, display: 'flex', flexDirection: 'column', gap: 2,
           }}>
-            <span style={{ fontSize: '0.65rem', fontWeight: 600, color: '#454540', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--txt3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
               {p.label}
             </span>
             <span style={{
               fontFamily: "'DM Mono', monospace", fontSize: '1rem', fontWeight: 400,
-              color: p.danger ? '#f87171' : '#e8e8e6',
+              color: p.danger ? 'var(--err)' : 'var(--txt)',
             }}>
               {p.value}
             </span>
@@ -355,15 +370,15 @@ export default function LogsPage() {
 
       {/* Table */}
       <div style={{
-        background: '#1c1c1a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10,
+        background: 'var(--surf)', border: '1px solid var(--border)', borderRadius: 10,
         overflow: 'hidden',
       }}>
         {loading ? (
-          <div style={{ padding: 48, textAlign: 'center', color: '#454540', fontSize: '0.9rem' }}>
+          <div style={{ padding: 48, textAlign: 'center', color: 'var(--txt3)', fontSize: '0.9rem' }}>
             Loading logs…
           </div>
         ) : rows.length === 0 ? (
-          <div style={{ padding: 48, textAlign: 'center', color: '#454540', fontSize: '0.9rem' }}>
+          <div style={{ padding: 48, textAlign: 'center', color: 'var(--txt3)', fontSize: '0.9rem' }}>
             No data for the selected range and node.
           </div>
         ) : (
@@ -374,16 +389,16 @@ export default function LogsPage() {
               minWidth: 1100,
             }}>
               <thead>
-                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                <tr style={{ borderBottom: '1px solid var(--border)' }}>
                   {COLUMNS.map(c => (
                     <th
                       key={c.key}
                       style={{
                         padding: '10px 14px', textAlign: 'left',
                         fontSize: '0.65rem', fontWeight: 700,
-                        color: '#454540', textTransform: 'uppercase',
+                        color: 'var(--txt3)', textTransform: 'uppercase',
                         letterSpacing: '0.07em', whiteSpace: 'nowrap',
-                        background: '#161614',
+                        background: 'var(--surf2)',
                       }}
                     >
                       {c.label}
@@ -397,25 +412,25 @@ export default function LogsPage() {
                   const warnSoc = row.soc < 15;
                   const warnTmp = row.temp_high > 45;
                   const rowBg   = fault
-                    ? 'rgba(248,113,113,0.04)'
+                    ? 'rgba(220,38,38,0.04)'
                     : i % 2 === 1
-                    ? 'rgba(255,255,255,0.015)'
+                    ? 'var(--surf2)'
                     : 'transparent';
 
                   return (
                     <tr
                       key={`${row.node_id}-${row.ts_utc}-${i}`}
                       style={{
-                        borderBottom: '1px solid rgba(255,255,255,0.04)',
+                        borderBottom: '1px solid var(--border)',
                         background: rowBg,
                       }}
                     >
                       {COLUMNS.map(c => {
                         const val   = cellValue(row, c.key);
-                        let color   = '#e8e8e6';
-                        if (c.key === 'fault_active') color = fault ? '#f87171' : '#4ade80';
-                        if (c.key === 'soc'          && warnSoc) color = '#fb923c';
-                        if (c.key === 'temp_high'    && warnTmp) color = '#f87171';
+                        let color   = 'var(--txt)';
+                        if (c.key === 'fault_active') color = fault ? 'var(--err)' : 'var(--ok)';
+                        if (c.key === 'soc'          && warnSoc) color = 'var(--warn)';
+                        if (c.key === 'temp_high'    && warnTmp) color = 'var(--err)';
                         return (
                           <td
                             key={c.key}
