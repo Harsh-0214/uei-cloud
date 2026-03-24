@@ -397,18 +397,6 @@ export default function Dashboard() {
               </h1>
             </div>
 
-            <button
-              onClick={handleLogout}
-              style={{
-                fontFamily: 'var(--ff-sans)', fontSize: '0.78rem', fontWeight: 600,
-                background: 'transparent', border: '1px solid var(--border)',
-                borderRadius: 8, color: 'var(--txt2)', padding: '7px 16px',
-                cursor: 'pointer', transition: 'all 0.15s',
-              }}
-            >
-              Sign out
-            </button>
-
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>
               {lastUpdated && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
@@ -438,6 +426,18 @@ export default function Dashboard() {
                   </div>
                 )}
               </div>
+              <button
+                onClick={handleLogout}
+                style={{
+                  alignSelf: 'flex-end',
+                  fontFamily: 'var(--ff-sans)', fontSize: '0.75rem', fontWeight: 600,
+                  background: 'transparent', border: '1px solid var(--border)',
+                  borderRadius: 6, color: 'var(--txt3)', padding: '5px 12px',
+                  cursor: 'pointer', transition: 'all 0.15s',
+                }}
+              >
+                Sign out
+              </button>
             </div>
           </div>
           <div style={{ height: 1, background: 'var(--border)', marginTop: 24 }} />
