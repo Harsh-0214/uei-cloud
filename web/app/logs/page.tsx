@@ -223,36 +223,53 @@ export default function LogsPage() {
 
       {/* Header */}
       <div style={{ marginBottom: 28 }}>
+        {/* Top accent bar */}
+        <div style={{ height: 3, background: 'linear-gradient(90deg, #88887e 0%, rgba(136,136,126,0.1) 60%, transparent 100%)', borderRadius: 99, marginBottom: 24 }} />
+
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
+          {/* Brand + page badge */}
           <div>
-            <p style={{ fontSize: '0.72rem', fontWeight: 500, color: '#454540', margin: '0 0 4px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+              <h1 style={{ fontSize: '1.85rem', fontWeight: 800, margin: 0, letterSpacing: '-0.03em', lineHeight: 1, background: 'linear-gradient(135deg, #e8e8e6 30%, #88887e 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                UEI Cloud
+              </h1>
+              <span style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#e8e8e6', background: '#252523', border: '1px solid rgba(255,255,255,0.12)', padding: '3px 8px', borderRadius: 4 }}>
+                Logs
+              </span>
+            </div>
+            <p style={{ fontSize: '0.72rem', fontWeight: 500, color: '#454540', margin: 0 }}>
               Unified Energy Interface
             </p>
-            <h1 style={{ fontSize: '1.75rem', fontWeight: 700, color: '#e8e8e6', margin: 0, letterSpacing: '-0.02em', lineHeight: 1 }}>
-              UEI Cloud
-            </h1>
           </div>
 
+          {/* Right: user + nav */}
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
             {user && (
-              <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#e8e8e6' }}>
-                {user.email}
-                <span style={{ color: '#454540', fontWeight: 400, marginLeft: 8 }}>
-                  {user.org_name} · <span style={{ color: '#e09a20', textTransform: 'capitalize' }}>{user.role}</span>
-                </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#e8e8e6' }}>{user.email}</div>
+                  <div style={{ fontSize: '0.68rem', color: '#454540', marginTop: 2 }}>
+                    {user.org_name} · <span style={{ color: '#e09a20', textTransform: 'capitalize' }}>{user.role}</span>
+                  </div>
+                </div>
               </div>
             )}
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <a href="/dashboard" style={{ fontSize: '0.78rem', color: '#88887e', textDecoration: 'none', fontWeight: 500 }}>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <a href="/dashboard" style={{ fontSize: '0.75rem', fontWeight: 600, color: '#88887e', textDecoration: 'none', padding: '4px 12px', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 20, transition: 'all 0.15s' }}
+                onMouseEnter={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.color='#e8e8e6'; a.style.borderColor='rgba(255,255,255,0.2)'; }}
+                onMouseLeave={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.color='#88887e'; a.style.borderColor='rgba(255,255,255,0.08)'; }}>
                 ← Dashboard
               </a>
-              <span style={{ color: '#454540' }}>·</span>
-              <a href="/users" style={{ fontSize: '0.78rem', color: '#88887e', textDecoration: 'none', fontWeight: 500 }}>
+              <a href="/users" style={{ fontSize: '0.75rem', fontWeight: 600, color: '#88887e', textDecoration: 'none', padding: '4px 12px', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 20, transition: 'all 0.15s' }}
+                onMouseEnter={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.color='#e8e8e6'; a.style.borderColor='rgba(255,255,255,0.2)'; }}
+                onMouseLeave={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.color='#88887e'; a.style.borderColor='rgba(255,255,255,0.08)'; }}>
                 Users
               </a>
             </div>
           </div>
         </div>
+
+        <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', marginTop: 24 }} />
       </div>
 
       {/* Controls bar */}
@@ -423,8 +440,21 @@ export default function LogsPage() {
       </div>
 
       {/* Footer */}
-      <div style={{ marginTop: 24, textAlign: 'center', fontSize: '0.72rem', color: '#454540' }}>
-        UEI Cloud · Telemetry Logs · auto-refreshes every 10 s
+      <div style={{ marginTop: 40, paddingTop: 20, borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+        <span style={{ fontSize: '0.72rem', color: '#454540', fontWeight: 500 }}>
+          UEI Cloud · Telemetry Logs · auto-refreshes every 10 s
+        </span>
+        <a href="/login" style={{ fontSize: '0.72rem', fontWeight: 600, color: '#454540', textDecoration: 'none', padding: '5px 14px', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6, transition: 'all 0.15s' }}
+          onMouseEnter={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.color='#f87171'; a.style.borderColor='rgba(248,113,113,0.3)'; }}
+          onMouseLeave={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.color='#454540'; a.style.borderColor='rgba(255,255,255,0.06)'; }}
+          onClick={async e => {
+            e.preventDefault();
+            await fetch('/api/auth/logout', { method: 'POST' });
+            window.location.href = '/login';
+          }}
+        >
+          Sign out
+        </a>
       </div>
     </div>
   );
