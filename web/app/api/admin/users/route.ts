@@ -1,6 +1,5 @@
-// Proxy GET /api/auth/me → FastAPI GET /auth/me
-// Reads the httpOnly cookie set at login and forwards as Bearer token
-// Returns { id, email, role, organization_id, org_name }
+// Proxy GET /api/admin/users → FastAPI GET /admin/users
+// Returns all users with their org_name
 
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
@@ -13,7 +12,7 @@ export async function GET() {
     return NextResponse.json({ detail: 'Not authenticated' }, { status: 401 });
   }
   try {
-    const resp = await fetch(`${API_URL}/auth/me`, {
+    const resp = await fetch(`${API_URL}/admin/users`, {
       headers: { Authorization: `Bearer ${token}` },
       cache: 'no-store',
     });

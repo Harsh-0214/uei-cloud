@@ -4,8 +4,8 @@ export function middleware(req: NextRequest) {
   const token = req.cookies.get('uei_token')?.value;
   const { pathname } = req.nextUrl;
 
-  // Protect /dashboard — redirect to /login if no token
-  if (pathname.startsWith('/dashboard')) {
+  // Protect /dashboard and /users — redirect to /login if no token
+  if (pathname.startsWith('/dashboard') || pathname.startsWith('/users')) {
     if (!token) {
       const url = req.nextUrl.clone();
       url.pathname = '/login';
@@ -26,5 +26,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/', '/login', '/dashboard/:path*'],
+  matcher: ['/', '/login', '/dashboard/:path*', '/users/:path*'],
 };
