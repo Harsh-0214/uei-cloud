@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Chart, registerables } from 'chart.js';
+import ThemeToggle from '../components/ThemeToggle';
 
 Chart.register(...registerables);
 
@@ -66,36 +67,45 @@ function renderMd(text: string): string {
 const escHtml = (s: string) =>
   String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-const CHART_DEFAULTS = {
-  responsive: true,
-  maintainAspectRatio: false,
-  animation: false as const,
-  plugins: {
-    legend: { display: false },
-    tooltip: {
-      backgroundColor: '#252523',
-      titleColor: '#88887e',
-      bodyColor: '#e8e8e6',
-      borderColor: 'rgba(255,255,255,0.1)',
-      borderWidth: 1,
-      cornerRadius: 6,
-      titleFont: { family: "'DM Mono', monospace", size: 11 },
-      bodyFont:  { family: "'DM Mono', monospace", size: 11 },
+function getChartDefaults() {
+  const s   = typeof window !== 'undefined' ? getComputedStyle(document.documentElement) : null;
+  const v   = (name: string, fallback: string) => s ? s.getPropertyValue(name).trim() || fallback : fallback;
+  const txt3    = v('--txt3', '#454540');
+  const border  = v('--border', 'rgba(128,128,128,0.12)');
+  const surf2   = v('--surf2', '#252523');
+  const txt2    = v('--txt2', '#88887e');
+  const txt     = v('--txt', '#e8e8e6');
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: false as const,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: surf2,
+        titleColor: txt2,
+        bodyColor: txt,
+        borderColor: border,
+        borderWidth: 1,
+        cornerRadius: 6,
+        titleFont: { family: "'DM Mono', monospace", size: 11 },
+        bodyFont:  { family: "'DM Mono', monospace", size: 11 },
+      },
     },
-  },
-  scales: {
-    x: {
-      ticks: { color: '#454540', maxTicksLimit: 6, font: { size: 11, family: "'DM Mono', monospace" } },
-      grid:  { color: 'rgba(255,255,255,0.04)' },
-      border: { color: 'rgba(255,255,255,0.06)' },
+    scales: {
+      x: {
+        ticks: { color: txt3, maxTicksLimit: 6, font: { size: 11, family: "'DM Mono', monospace" } },
+        grid:  { color: border },
+        border: { color: border },
+      },
+      y: {
+        ticks: { color: txt3, font: { size: 11, family: "'DM Mono', monospace" } },
+        grid:  { color: border },
+        border: { color: border },
+      },
     },
-    y: {
-      ticks: { color: '#454540', font: { size: 11, family: "'DM Mono', monospace" } },
-      grid:  { color: 'rgba(255,255,255,0.04)' },
-      border: { color: 'rgba(255,255,255,0.06)' },
-    },
-  },
-};
+  };
+}
 
 // ── Sub-components ─────────────────────────────────────────────
 
@@ -187,9 +197,10 @@ export default function Dashboard() {
 
   const initCharts = useCallback(() => {
     if (!socRef.current || !voltRef.current || !tempRef.current) return;
-    chartsRef.current.soc     = new Chart(socRef.current,  { type: 'line', data: { labels: [], datasets: [] }, options: { ...CHART_DEFAULTS } });
-    chartsRef.current.voltage = new Chart(voltRef.current, { type: 'line', data: { labels: [], datasets: [] }, options: { ...CHART_DEFAULTS } });
-    chartsRef.current.temp    = new Chart(tempRef.current, { type: 'line', data: { labels: [], datasets: [] }, options: { ...CHART_DEFAULTS } });
+    const cd = getChartDefaults();
+    chartsRef.current.soc     = new Chart(socRef.current,  { type: 'line', data: { labels: [], datasets: [] }, options: { ...cd } });
+    chartsRef.current.voltage = new Chart(voltRef.current, { type: 'line', data: { labels: [], datasets: [] }, options: { ...cd } });
+    chartsRef.current.temp    = new Chart(tempRef.current, { type: 'line', data: { labels: [], datasets: [] }, options: { ...cd } });
   }, []);
 
   function updateChart(
@@ -503,7 +514,7 @@ export default function Dashboard() {
             {/* Brand + page badge */}
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-                <h1 style={{ fontSize: '1.85rem', fontWeight: 800, margin: 0, letterSpacing: '-0.03em', lineHeight: 1, background: 'linear-gradient(135deg, #e8e8e6 30%, #88887e 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                <h1 style={{ fontSize: '1.85rem', fontWeight: 800, margin: 0, letterSpacing: '-0.03em', lineHeight: 1, background: 'var(--title-grad)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
                   UEI Cloud
                 </h1>
                 <span style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#111', background: 'var(--accent)', padding: '3px 8px', borderRadius: 4 }}>
@@ -541,6 +552,7 @@ export default function Dashboard() {
                   >
                     {currentUser.email[0].toUpperCase()}
                   </a>
+                  <ThemeToggle />
                 </div>
               )}
               {/* Live status + nav */}

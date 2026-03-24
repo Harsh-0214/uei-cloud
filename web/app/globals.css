@@ -3,23 +3,44 @@
 @tailwind utilities;
 
 :root {
-  --bg:          #111111;
-  --surf:        #1c1c1a;
-  --surf2:       #252523;
-  --border:      rgba(255, 255, 255, 0.08);
-  --border-hi:   rgba(255, 255, 255, 0.15);
-  --accent:      #e09a20;
-  --accent-soft: rgba(224, 154, 32, 0.1);
-  --ok:          #4ade80;
-  --warn:        #fb923c;
-  --err:         #f87171;
-  --txt:         #e8e8e6;
-  --txt2:        #88887e;
-  --txt3:        #454540;
-  --ff-sans:     'Plus Jakarta Sans', sans-serif;
-  --ff-mono:     'DM Mono', monospace;
-  --r:           10px;
-  --r-sm:        6px;
+  --bg:            #111111;
+  --surf:          #1c1c1a;
+  --surf2:         #252523;
+  --border:        rgba(255, 255, 255, 0.08);
+  --border-hi:     rgba(255, 255, 255, 0.15);
+  --accent:        #e09a20;
+  --accent-soft:   rgba(224, 154, 32, 0.1);
+  --ok:            #4ade80;
+  --warn:          #fb923c;
+  --err:           #f87171;
+  --txt:           #e8e8e6;
+  --txt2:          #88887e;
+  --txt3:          #454540;
+  --ff-sans:       'Plus Jakarta Sans', sans-serif;
+  --ff-mono:       'DM Mono', monospace;
+  --r:             10px;
+  --r-sm:          6px;
+  --title-grad:    linear-gradient(135deg, #e8e8e6 30%, #88887e 100%);
+  --shadow-card:   0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* ── Light mode overrides ── */
+html.light {
+  --bg:            #f5f4f0;
+  --surf:          #ffffff;
+  --surf2:         #eceae3;
+  --border:        rgba(0, 0, 0, 0.09);
+  --border-hi:     rgba(0, 0, 0, 0.18);
+  --accent:        #c97e12;
+  --accent-soft:   rgba(201, 126, 18, 0.1);
+  --ok:            #16a34a;
+  --warn:          #ea580c;
+  --err:           #dc2626;
+  --txt:           #1c1c1a;
+  --txt2:          #6b6b62;
+  --txt3:          #9e9e94;
+  --title-grad:    linear-gradient(135deg, #1c1c1a 30%, #6b6b62 100%);
+  --shadow-card:   0 4px 20px rgba(0, 0, 0, 0.08);
 }
 
 * { box-sizing: border-box; }
@@ -30,6 +51,7 @@ body {
   font-family: var(--ff-sans);
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
+  transition: background 0.2s, color 0.2s;
 }
 
 /* ── Metrics grid ── */
@@ -65,10 +87,12 @@ body {
 }
 .mc:hover {
   border-color: var(--border-hi);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-card);
 }
 .mc.warn { background: rgba(251, 146, 60, 0.06); }
 .mc.err  { background: rgba(248, 113, 113, 0.07); }
+html.light .mc.warn { background: rgba(234, 88, 12, 0.05); }
+html.light .mc.err  { background: rgba(220, 38, 38, 0.05); }
 
 .mc-label {
   font-size: 0.68rem;
@@ -90,7 +114,7 @@ body {
 }
 .mc-bar-bg {
   height: 3px;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.08);
   border-radius: 99px;
   margin-top: 14px;
   overflow: hidden;
@@ -111,7 +135,7 @@ body {
   font-family: var(--ff-sans);
   font-size: 0.8rem;
   font-weight: 500;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--surf2);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   color: var(--txt2);
@@ -143,11 +167,11 @@ body {
 /* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 99px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+::-webkit-scrollbar-thumb { background: rgba(128,128,128,0.2); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(128,128,128,0.35); }
 
 /* ── Select option ── */
-select option { background: #1c1c1a; }
+select option { background: var(--surf); }
 
 /* ── Landing page animations ── */
 @keyframes fadeUp {
