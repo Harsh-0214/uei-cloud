@@ -282,6 +282,57 @@ def ingest(pkt: TelemetryPacket):
 
 # ── Protected data routes ────────────────────────────────────────────────────
 
+RANGE_MAP = {
+    "5m":  "5 minutes",
+    "15m": "15 minutes",
+    "30m": "30 minutes",
+    "1h":  "1 hour",
+    "6h":  "6 hours",
+    "24h": "24 hours",
+}
+
+@app.get("/metrics")
+def metrics(node_id: str, metric: str, range: str = "1h") -> Any:
+    """
+    Return time-series data for a single node used by the dashboard charts.
+    metric: soc | pack_voltage | temperature
+    range:  5m | 15m | 30m | 1h | 6h | 24h
+    """
+    interval = RANGE_MAP.get(range, "1 hour")
+
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            if metric == "temperature":
+                cur.execute(
+                    """
+                    SELECT ts_utc AS time, temp_high AS high, temp_low AS low
+                    FROM telemetry
+                    WHERE node_id = %s
+                      AND ts_utc >= NOW() AT TIME ZONE 'UTC' - INTERVAL %s
+                    ORDER BY ts_utc ASC
+                    """,
+                    (node_id, interval),
+                )
+            elif metric in ("soc", "pack_voltage"):
+                col = "soc" if metric == "soc" else "pack_voltage"
+                cur.execute(
+                    f"""
+                    SELECT ts_utc AS time, {col} AS value
+                    FROM telemetry
+                    WHERE node_id = %s
+                      AND ts_utc >= NOW() AT TIME ZONE 'UTC' - INTERVAL %s
+                    ORDER BY ts_utc ASC
+                    """,
+                    (node_id, interval),
+                )
+            else:
+                raise HTTPException(status_code=400, detail=f"Unknown metric '{metric}'")
+
+            rows = cur.fetchall()
+
+    return [dict(r) for r in rows]
+
+
 @app.get("/latest")
 def latest(node_id: Optional[str] = None) -> Any:
     """Return the most recent telemetry row(s) for all nodes."""

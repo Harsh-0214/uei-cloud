@@ -1,12 +1,11 @@
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-const DJANGO_URL = process.env.DJANGO_URL ?? 'http://34.130.163.154:8080';
+const API_URL = process.env.API_URL ?? 'http://34.130.163.154:8000';
 
 export async function GET() {
-  const url = `${DJANGO_URL}/api/stream/latest`;
   try {
-    const resp = await fetch(url, { cache: 'no-store' });
+    const resp = await fetch(`${API_URL}/stream/latest`, { cache: 'no-store' });
     return new Response(resp.body, {
       headers: {
         'Content-Type': 'text/event-stream',
