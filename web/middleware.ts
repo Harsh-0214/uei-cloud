@@ -13,13 +13,18 @@ export function middleware(req: NextRequest) {
     }
   }
 
+  // Root path: logged in → /dashboard, not logged in → /login
+  if (pathname === '/') {
+    const url = req.nextUrl.clone();
+    url.pathname = token ? '/dashboard' : '/login';
+    return NextResponse.redirect(url);
+  }
+
   // If already logged in, redirect /login → /dashboard
-  if (pathname === '/login' || pathname === '/') {
-    if (token) {
-      const url = req.nextUrl.clone();
-      url.pathname = '/dashboard';
-      return NextResponse.redirect(url);
-    }
+  if (pathname === '/login' && token) {
+    const url = req.nextUrl.clone();
+    url.pathname = '/dashboard';
+    return NextResponse.redirect(url);
   }
 
   return NextResponse.next();

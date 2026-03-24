@@ -191,22 +191,29 @@ export default function Dashboard() {
     lines: { key: string; label: string; color: string }[],
     range: string,
   ) {
-    if (!data?.length) return;
     const shortRange = range === '5m' || range === '15m' || range === '30m';
-    chart.data.labels = data.map(d => {
+    chart.data.labels = (data ?? []).map(d => {
       const t = new Date(d.time);
       return shortRange
         ? t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
         : t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     });
     chart.data.datasets = lines.map(l => ({
-      label: l.label, data: data.map(d => d[l.key]),
+      label: l.label, data: (data ?? []).map(d => d[l.key]),
       borderColor: l.color, backgroundColor: l.color + '18',
       borderWidth: 2, pointRadius: 0, fill: true, tension: 0.4,
     }));
     const maxTicks = shortRange ? 8 : range === '24h' ? 8 : 6;
     (chart.options.scales!.x as { ticks: { maxTicksLimit: number } }).ticks.maxTicksLimit = maxTicks;
     chart.update('none');
+  }
+
+  function clearCharts() {
+    for (const chart of Object.values(chartsRef.current)) {
+      chart.data.labels = [];
+      chart.data.datasets = [];
+      chart.update('none');
+    }
   }
 
   // ── Data fetching ───────────────────────────────────────────
@@ -309,7 +316,7 @@ export default function Dashboard() {
 
   async function handleLogout() {
     await fetch('/api/auth/logout', { method: 'POST' });
-    window.location.href = '/login';
+    window.location.href = '/';
   }
 
   // ── Helpers ─────────────────────────────────────────────────
@@ -323,6 +330,7 @@ export default function Dashboard() {
 
   function handleNodeChange(id: string) {
     setSelectedId(id);
+    clearCharts();
     fetchCharts(id, timeRange);
   }
 
