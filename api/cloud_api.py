@@ -353,6 +353,37 @@ def latest(node_id: Optional[str] = None) -> Any:
     return rows[0] if node_id else rows
 
 
+@app.get("/logs")
+def logs(node_id: Optional[str] = None, range: str = "1h", limit: int = 500) -> Any:
+    """Return structured telemetry log rows filtered by time range. Used by the Logs page."""
+    interval = RANGE_MAP.get(range, "1 hour")
+    limit = min(limit, 2000)
+    if node_id:
+        q = """
+            SELECT * FROM telemetry
+            WHERE node_id = %s
+              AND ts_utc >= NOW() AT TIME ZONE 'UTC' - INTERVAL %s
+            ORDER BY ts_utc DESC
+            LIMIT %s;
+        """
+        params = (node_id, interval, limit)
+    else:
+        q = """
+            SELECT * FROM telemetry
+            WHERE ts_utc >= NOW() AT TIME ZONE 'UTC' - INTERVAL %s
+            ORDER BY ts_utc DESC
+            LIMIT %s;
+        """
+        params = (interval, limit)
+
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(q, params)
+            rows = cur.fetchall()
+
+    return [dict(r) for r in rows]
+
+
 @app.get("/telemetry")
 def list_telemetry(node_id: Optional[str] = None, limit: int = 100) -> Any:
     """Return recent telemetry rows for all nodes. Optional node_id filter. Max 1000 rows."""

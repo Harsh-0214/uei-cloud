@@ -531,11 +531,32 @@ export default function Dashboard() {
                 </div>
               )}
               {lastUpdated && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                  <span className="live-dot" />
-                  <span style={{ fontSize: '0.78rem', color: 'var(--txt2)', fontWeight: 500 }}>
-                    Updated {lastUpdated}
-                  </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                    <span className="live-dot" />
+                    <span style={{ fontSize: '0.78rem', color: 'var(--txt2)', fontWeight: 500 }}>
+                      Updated {lastUpdated}
+                    </span>
+                  </div>
+                  <a
+                    href="/logs"
+                    style={{
+                      fontSize: '0.75rem', fontWeight: 600, color: 'var(--txt2)',
+                      textDecoration: 'none', padding: '3px 10px',
+                      border: '1px solid var(--border)', borderRadius: 6,
+                      background: 'transparent', transition: 'all 0.15s',
+                    }}
+                    onMouseEnter={e => {
+                      (e.currentTarget as HTMLAnchorElement).style.color = 'var(--txt)';
+                      (e.currentTarget as HTMLAnchorElement).style.borderColor = 'var(--border-hi)';
+                    }}
+                    onMouseLeave={e => {
+                      (e.currentTarget as HTMLAnchorElement).style.color = 'var(--txt2)';
+                      (e.currentTarget as HTMLAnchorElement).style.borderColor = 'var(--border)';
+                    }}
+                  >
+                    Logs
+                  </a>
                 </div>
               )}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
