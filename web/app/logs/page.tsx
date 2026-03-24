@@ -194,16 +194,16 @@ export default function LogsPage() {
 
   // ── Render ──────────────────────────────────────────────────────────────
 
-  const btn = (label: string, active: boolean, onClick: () => void, accent = false) => (
+  const btn = (label: string, active: boolean, onClick: () => void) => (
     <button
       key={label}
       onClick={onClick}
       style={{
         padding: '5px 12px',
         borderRadius: 6,
-        border: `1px solid ${active ? (accent ? '#e09a20' : 'rgba(255,255,255,0.25)') : 'rgba(255,255,255,0.08)'}`,
-        background: active ? (accent ? 'rgba(224,154,32,0.15)' : 'rgba(255,255,255,0.08)') : 'transparent',
-        color: active ? (accent ? '#e09a20' : '#e8e8e6') : '#88887e',
+        border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
+        background: active ? 'var(--accent-soft)' : 'transparent',
+        color: active ? 'var(--accent)' : 'var(--txt2)',
         fontSize: '0.78rem',
         fontWeight: 600,
         cursor: 'pointer',
@@ -243,45 +243,39 @@ export default function LogsPage() {
             </p>
           </div>
 
-          {/* Right: user + theme toggle */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+          {/* Right: nav links + user + theme toggle */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+            {[
+              { href: '/dashboard', label: '← Dashboard' },
+              { href: '/users',     label: 'Users' },
+            ].map(({ href, label }) => (
+              <a
+                key={href}
+                href={href}
+                style={{
+                  fontSize: '0.82rem', fontWeight: 600,
+                  color: 'var(--txt2)', textDecoration: 'none',
+                  transition: 'color 0.15s',
+                }}
+                onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = 'var(--txt)'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = 'var(--txt2)'; }}
+              >
+                {label}
+              </a>
+            ))}
             {user && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <>
+                <div style={{ width: 1, height: 20, background: 'var(--border)' }} />
                 <div style={{ textAlign: 'right' }}>
                   <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--txt)' }}>{user.email}</div>
                   <div style={{ fontSize: '0.68rem', color: 'var(--txt3)', marginTop: 2 }}>
                     {user.org_name} · <span style={{ color: 'var(--accent)', textTransform: 'capitalize' }}>{user.role}</span>
                   </div>
                 </div>
-                <ThemeToggle />
-              </div>
+              </>
             )}
+            <ThemeToggle />
           </div>
-        </div>
-
-        {/* Centred nav buttons */}
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginTop: 20 }}>
-          {[
-            { href: '/dashboard', label: '← Dashboard' },
-            { href: '/users',     label: 'Users' },
-          ].map(({ href, label }) => (
-            <a
-              key={href}
-              href={href}
-              style={{
-                fontSize: '0.88rem', fontWeight: 600,
-                color: 'var(--txt2)', textDecoration: 'none',
-                padding: '10px 28px',
-                border: '1px solid var(--border)', borderRadius: 99,
-                background: 'var(--surf)',
-                transition: 'all 0.15s',
-              }}
-              onMouseEnter={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.color='var(--txt)'; a.style.borderColor='var(--border-hi)'; a.style.background='var(--surf2)'; }}
-              onMouseLeave={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.color='var(--txt2)'; a.style.borderColor='var(--border)'; a.style.background='var(--surf)'; }}
-            >
-              {label}
-            </a>
-          ))}
         </div>
 
         <div style={{ height: 1, background: 'var(--border)', marginTop: 20 }} />
