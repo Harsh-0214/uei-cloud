@@ -159,6 +159,8 @@ export default function Dashboard() {
   const [initialized, setInitialized] = useState(false);
   const [lastUpdated, setLastUpdated] = useState('');
   const [stale,       setStale]       = useState(false);
+  const [compareMode, setCompareMode] = useState(false);
+  const [compareId,   setCompareId]   = useState('');
 
   const [chatOpen,        setChatOpen]        = useState(false);
   const [chatBusy,        setChatBusy]        = useState(false);
@@ -175,6 +177,8 @@ export default function Dashboard() {
   const initializedRef = useRef(false);
   const selectedIdRef  = useRef('');
   const timeRangeRef   = useRef<string>('1h');
+  const compareIdRef   = useRef('');
+  const compareModeRef = useRef(false);
 
   // ── Charts ──────────────────────────────────────────────────
 
@@ -191,16 +195,15 @@ export default function Dashboard() {
     lines: { key: string; label: string; color: string }[],
     range: string,
   ) {
-    if (!data?.length) return;
     const shortRange = range === '5m' || range === '15m' || range === '30m';
-    chart.data.labels = data.map(d => {
+    chart.data.labels = (data ?? []).map(d => {
       const t = new Date(d.time);
       return shortRange
         ? t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
         : t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     });
     chart.data.datasets = lines.map(l => ({
-      label: l.label, data: data.map(d => d[l.key]),
+      label: l.label, data: (data ?? []).map(d => d[l.key]),
       borderColor: l.color, backgroundColor: l.color + '18',
       borderWidth: 2, pointRadius: 0, fill: true, tension: 0.4,
     }));
@@ -209,23 +212,85 @@ export default function Dashboard() {
     chart.update('none');
   }
 
+  function clearCharts() {
+    for (const chart of Object.values(chartsRef.current)) {
+      chart.data.labels = [];
+      chart.data.datasets = [];
+      chart.update('none');
+    }
+  }
+
   // ── Data fetching ───────────────────────────────────────────
 
-  const fetchCharts = useCallback(async (id: string, range: string) => {
+  const fetchCharts = useCallback(async (id: string, range: string, cmpId = '') => {
     if (!id) return;
-    const base = `/api/metrics?node_id=${encodeURIComponent(id)}&range=${range}`;
+    const base    = `/api/metrics?node_id=${encodeURIComponent(id)}&range=${range}`;
+    const cmpBase = cmpId ? `/api/metrics?node_id=${encodeURIComponent(cmpId)}&range=${range}` : '';
+
     try {
-      const [soc, volt, temp] = await Promise.all([
+      const fetches: Promise<Record<string, number>[]>[] = [
         fetch(`${base}&metric=soc`,          { cache: 'no-store' }).then(r => r.json()),
         fetch(`${base}&metric=pack_voltage`, { cache: 'no-store' }).then(r => r.json()),
         fetch(`${base}&metric=temperature`,  { cache: 'no-store' }).then(r => r.json()),
-      ]);
-      if (chartsRef.current.soc)     updateChart(chartsRef.current.soc,     soc,  [{ key: 'value', label: 'SOC',     color: '#e09a20' }], range);
-      if (chartsRef.current.voltage) updateChart(chartsRef.current.voltage, volt, [{ key: 'value', label: 'Voltage', color: '#a78bfa' }], range);
-      if (chartsRef.current.temp)    updateChart(chartsRef.current.temp,    temp, [
-        { key: 'high', label: 'Temp High', color: '#f87171' },
-        { key: 'low',  label: 'Temp Low',  color: '#60a5fa' },
-      ], range);
+        ...(cmpId ? [
+          fetch(`${cmpBase}&metric=soc`,          { cache: 'no-store' }).then(r => r.json()),
+          fetch(`${cmpBase}&metric=pack_voltage`, { cache: 'no-store' }).then(r => r.json()),
+          fetch(`${cmpBase}&metric=temperature`,  { cache: 'no-store' }).then(r => r.json()),
+        ] : []),
+      ];
+
+      const results = await Promise.all(fetches);
+      const [soc, volt, temp] = results;
+      const [cmpSoc, cmpVolt, cmpTemp] = cmpId ? results.slice(3) : [[], [], []];
+
+      const shortRange = ['5m', '15m', '30m'].includes(range);
+      const maxTicks   = shortRange ? 8 : range === '24h' ? 8 : 6;
+
+      type DS = { key: string; label: string; color: string };
+      function buildDatasets(
+        primary: Record<string, number>[], pLines: DS[],
+        compare: Record<string, number>[], cLines: DS[],
+      ) {
+        const ds = pLines.map(l => ({
+          label: cmpId ? `${id} ${l.label}` : l.label,
+          data: (primary ?? []).map(d => d[l.key]),
+          borderColor: l.color, backgroundColor: l.color + '18',
+          borderWidth: 2, pointRadius: 0, fill: true, tension: 0.4,
+        }));
+        if (cmpId) cLines.forEach(l => ds.push({
+          label: `${cmpId} ${l.label}`,
+          data: (compare ?? []).map(d => d[l.key]),
+          borderColor: l.color, backgroundColor: l.color + '18',
+          borderWidth: 2, pointRadius: 0, fill: true, tension: 0.4,
+        }));
+        return ds;
+      }
+
+      const labels = (soc ?? []).map((d: Record<string, number>) => {
+        const t = new Date(d.time);
+        return shortRange
+          ? t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+          : t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      });
+
+      const configs: [string, ReturnType<typeof buildDatasets>][] = [
+        ['soc',     buildDatasets(soc,  [{ key: 'value', label: 'SOC',     color: '#e09a20' }],
+                                  cmpSoc, [{ key: 'value', label: 'SOC',     color: '#38bdf8' }])],
+        ['voltage', buildDatasets(volt, [{ key: 'value', label: 'Voltage', color: '#a78bfa' }],
+                                  cmpVolt,[{ key: 'value', label: 'Voltage', color: '#4ade80' }])],
+        ['temp',    buildDatasets(temp, [{ key: 'high', label: 'High', color: '#f87171' }, { key: 'low', label: 'Low', color: '#60a5fa' }],
+                                  cmpTemp,[{ key: 'high', label: 'High', color: '#fb923c' }, { key: 'low', label: 'Low', color: '#818cf8' }])],
+      ];
+
+      for (const [key, datasets] of configs) {
+        const chart = chartsRef.current[key];
+        if (!chart) continue;
+        chart.data.labels   = labels;
+        chart.data.datasets = datasets;
+        (chart.options.scales!.x as { ticks: { maxTicksLimit: number } }).ticks.maxTicksLimit = maxTicks;
+        (chart.options.plugins as { legend: { display: boolean } }).legend.display = !!cmpId;
+        chart.update('none');
+      }
     } catch { /* ignore */ }
   }, []);
 
@@ -264,8 +329,10 @@ export default function Dashboard() {
   }, []);
 
   // Keep refs in sync so intervals never have stale closures
-  useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
-  useEffect(() => { timeRangeRef.current  = timeRange;  }, [timeRange]);
+  useEffect(() => { selectedIdRef.current  = selectedId;  }, [selectedId]);
+  useEffect(() => { timeRangeRef.current   = timeRange;   }, [timeRange]);
+  useEffect(() => { compareIdRef.current   = compareId;   }, [compareId]);
+  useEffect(() => { compareModeRef.current = compareMode; }, [compareMode]);
 
   useEffect(() => {
     // Use SSE stream for live 1-second telemetry pushes
@@ -294,7 +361,9 @@ export default function Dashboard() {
     connect();
 
     const i2 = setInterval(() => {
-      if (initializedRef.current) fetchCharts(selectedIdRef.current, timeRangeRef.current);
+      if (initializedRef.current)
+        fetchCharts(selectedIdRef.current, timeRangeRef.current,
+                    compareModeRef.current ? compareIdRef.current : '');
     }, 5000);
 
     return () => { es?.close(); clearInterval(i2); };
@@ -309,7 +378,7 @@ export default function Dashboard() {
 
   async function handleLogout() {
     await fetch('/api/auth/logout', { method: 'POST' });
-    window.location.href = '/login';
+    window.location.href = '/';
   }
 
   // ── Helpers ─────────────────────────────────────────────────
@@ -318,12 +387,33 @@ export default function Dashboard() {
 
   function handleRangeChange(r: '5m' | '15m' | '30m' | '1h' | '6h' | '24h') {
     setTimeRange(r);
-    fetchCharts(selectedId, r);
+    fetchCharts(selectedId, r, compareMode ? compareId : '');
   }
 
   function handleNodeChange(id: string) {
     setSelectedId(id);
-    fetchCharts(id, timeRange);
+    clearCharts();
+    fetchCharts(id, timeRange, compareMode ? compareId : '');
+  }
+
+  function handleCompareChange(id: string) {
+    setCompareId(id);
+    fetchCharts(selectedId, timeRange, id);
+  }
+
+  function toggleCompare() {
+    if (compareMode) {
+      setCompareMode(false);
+      setCompareId('');
+      clearCharts();
+      fetchCharts(selectedId, timeRange);
+    } else {
+      const other = nodes.find(n => n.node_id !== selectedId);
+      if (!other) return;
+      setCompareMode(true);
+      setCompareId(other.node_id);
+      fetchCharts(selectedId, timeRange, other.node_id);
+    }
   }
 
   // ── Chat ────────────────────────────────────────────────────
@@ -448,24 +538,65 @@ export default function Dashboard() {
                   </span>
                 </div>
               )}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 {initialized && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <label style={{ fontSize: '0.75rem', color: 'var(--txt2)', fontWeight: 500 }}>Node</label>
-                    <select
-                      id="node-select"
-                      value={selectedId}
-                      onChange={e => handleNodeChange(e.target.value)}
-                      style={{
-                        background: 'var(--surf)', border: '1px solid var(--border)',
-                        borderRadius: 6, color: 'var(--txt)',
-                        fontFamily: 'var(--ff-sans)', fontSize: '0.8rem', fontWeight: 500,
-                        padding: '5px 10px', outline: 'none', cursor: 'pointer',
-                      }}
-                    >
-                      {nodes.map(n => <option key={n.node_id} value={n.node_id}>{n.node_id}</option>)}
-                    </select>
-                  </div>
+                  <>
+                    {/* Primary node */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {compareMode && <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#e09a20', flexShrink: 0, display: 'inline-block' }} />}
+                      <label style={{ fontSize: '0.75rem', color: 'var(--txt2)', fontWeight: 500 }}>Node</label>
+                      <select
+                        value={selectedId}
+                        onChange={e => handleNodeChange(e.target.value)}
+                        style={{
+                          background: 'var(--surf)', border: '1px solid var(--border)',
+                          borderRadius: 6, color: 'var(--txt)',
+                          fontFamily: 'var(--ff-sans)', fontSize: '0.8rem', fontWeight: 500,
+                          padding: '5px 10px', outline: 'none', cursor: 'pointer',
+                        }}
+                      >
+                        {nodes.map(n => <option key={n.node_id} value={n.node_id}>{n.node_id}</option>)}
+                      </select>
+                    </div>
+
+                    {/* Compare node selector */}
+                    {compareMode && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: '0.72rem', color: 'var(--txt3)', fontWeight: 500 }}>vs</span>
+                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#38bdf8', flexShrink: 0, display: 'inline-block' }} />
+                        <select
+                          value={compareId}
+                          onChange={e => handleCompareChange(e.target.value)}
+                          style={{
+                            background: 'var(--surf)', border: '1px solid rgba(56,189,248,0.4)',
+                            borderRadius: 6, color: '#38bdf8',
+                            fontFamily: 'var(--ff-sans)', fontSize: '0.8rem', fontWeight: 500,
+                            padding: '5px 10px', outline: 'none', cursor: 'pointer',
+                          }}
+                        >
+                          {nodes.filter(n => n.node_id !== selectedId).map(n => (
+                            <option key={n.node_id} value={n.node_id}>{n.node_id}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {/* Compare toggle */}
+                    {nodes.length > 1 && (
+                      <button
+                        onClick={toggleCompare}
+                        style={{
+                          fontFamily: 'var(--ff-sans)', fontSize: '0.75rem', fontWeight: 600,
+                          padding: '5px 12px', borderRadius: 6, cursor: 'pointer', transition: 'all 0.15s',
+                          background: compareMode ? 'rgba(56,189,248,0.12)' : 'transparent',
+                          border: compareMode ? '1px solid rgba(56,189,248,0.4)' : '1px solid var(--border)',
+                          color: compareMode ? '#38bdf8' : 'var(--txt2)',
+                        }}
+                      >
+                        {compareMode ? '× Compare' : '⇄ Compare'}
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
               <button
@@ -515,22 +646,65 @@ export default function Dashboard() {
             )}
 
             {/* Telemetry */}
-            <SectionLabel>Telemetry{stale && <span style={{ marginLeft: 10, fontSize: '0.68rem', color: 'var(--txt3)', fontWeight: 400 }}>— last known data</span>}</SectionLabel>
-            <div className="metrics-grid">
-              <MetricCard label="State of Charge" value={fmt(currentNode.soc)}              unit="%" bar={currentNode.soc}
-                highlight={currentNode.soc >= 30 ? 'normal' : currentNode.soc >= 15 ? 'warning' : 'danger'} />
-              <MetricCard label="Pack Voltage"    value={fmt(currentNode.pack_voltage)}    unit="V" />
-              <MetricCard label="Pack Current"    value={fmt(currentNode.pack_current)}    unit="A" />
-              <MetricCard label="Temp High"       value={fmt(currentNode.temp_high)}       unit="°C"
-                highlight={currentNode.temp_high > 45 ? 'danger' : 'normal'} />
-              <MetricCard label="Temp Low"        value={fmt(currentNode.temp_low)}        unit="°C" />
-              <MetricCard label="Highest Cell"    value={fmt(currentNode.highest_cell_v, 3)} unit="V" />
-              <MetricCard label="Lowest Cell"     value={fmt(currentNode.lowest_cell_v, 3)}  unit="V" />
-              <MetricCard label="CCL"             value={fmt(currentNode.ccl)}             unit="A" />
-              <MetricCard label="DCL"             value={fmt(currentNode.dcl)}             unit="A" />
-              <MetricCard label="Fault Status"    value={currentNode.fault_active ? 'Active' : 'Clear'}
-                highlight={currentNode.fault_active ? 'danger' : 'success'} />
-            </div>
+            <SectionLabel>
+              {compareMode ? 'Node Comparison' : 'Telemetry'}
+              {stale && <span style={{ marginLeft: 10, fontSize: '0.68rem', color: 'var(--txt3)', fontWeight: 400 }}>— last known data</span>}
+            </SectionLabel>
+
+            {!compareMode && (
+              <div className="metrics-grid">
+                <MetricCard label="State of Charge" value={fmt(currentNode.soc)}              unit="%" bar={currentNode.soc}
+                  highlight={currentNode.soc >= 30 ? 'normal' : currentNode.soc >= 15 ? 'warning' : 'danger'} />
+                <MetricCard label="Pack Voltage"    value={fmt(currentNode.pack_voltage)}    unit="V" />
+                <MetricCard label="Pack Current"    value={fmt(currentNode.pack_current)}    unit="A" />
+                <MetricCard label="Temp High"       value={fmt(currentNode.temp_high)}       unit="°C"
+                  highlight={currentNode.temp_high > 45 ? 'danger' : 'normal'} />
+                <MetricCard label="Temp Low"        value={fmt(currentNode.temp_low)}        unit="°C" />
+                <MetricCard label="Highest Cell"    value={fmt(currentNode.highest_cell_v, 3)} unit="V" />
+                <MetricCard label="Lowest Cell"     value={fmt(currentNode.lowest_cell_v, 3)}  unit="V" />
+                <MetricCard label="CCL"             value={fmt(currentNode.ccl)}             unit="A" />
+                <MetricCard label="DCL"             value={fmt(currentNode.dcl)}             unit="A" />
+                <MetricCard label="Fault Status"    value={currentNode.fault_active ? 'Active' : 'Clear'}
+                  highlight={currentNode.fault_active ? 'danger' : 'success'} />
+              </div>
+            )}
+
+            {compareMode && (() => {
+              const cmpNode = nodes.find(n => n.node_id === compareId);
+              return (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 8 }}>
+                  {[
+                    { node: currentNode, label: selectedId, accent: '#e09a20', border: 'rgba(224,154,32,0.25)', bg: 'rgba(224,154,32,0.06)' },
+                    { node: cmpNode,     label: compareId,  accent: '#38bdf8', border: 'rgba(56,189,248,0.25)',  bg: 'rgba(56,189,248,0.06)'  },
+                  ].map(({ node, label, accent, border, bg }) => (
+                    <div key={label} style={{ border: `1px solid ${border}`, borderRadius: 'var(--r)', overflow: 'hidden' }}>
+                      <div style={{ padding: '9px 16px', background: bg, borderBottom: `1px solid ${border}`, fontSize: '0.75rem', fontWeight: 700, color: accent, letterSpacing: '0.01em' }}>
+                        {label}
+                      </div>
+                      {node ? (
+                        <div className="metrics-grid" style={{ padding: 12 }}>
+                          <MetricCard label="SOC"          value={fmt(node.soc)}              unit="%" bar={node.soc}
+                            highlight={node.soc >= 30 ? 'normal' : node.soc >= 15 ? 'warning' : 'danger'} />
+                          <MetricCard label="Pack Voltage"  value={fmt(node.pack_voltage)}    unit="V" />
+                          <MetricCard label="Pack Current"  value={fmt(node.pack_current)}    unit="A" />
+                          <MetricCard label="Temp High"     value={fmt(node.temp_high)}       unit="°C"
+                            highlight={node.temp_high > 45 ? 'danger' : 'normal'} />
+                          <MetricCard label="Temp Low"      value={fmt(node.temp_low)}        unit="°C" />
+                          <MetricCard label="Highest Cell"  value={fmt(node.highest_cell_v, 3)} unit="V" />
+                          <MetricCard label="Lowest Cell"   value={fmt(node.lowest_cell_v, 3)}  unit="V" />
+                          <MetricCard label="CCL"           value={fmt(node.ccl)}             unit="A" />
+                          <MetricCard label="DCL"           value={fmt(node.dcl)}             unit="A" />
+                          <MetricCard label="Fault"         value={node.fault_active ? 'Active' : 'Clear'}
+                            highlight={node.fault_active ? 'danger' : 'success'} />
+                        </div>
+                      ) : (
+                        <div style={{ padding: 24, fontSize: '0.82rem', color: 'var(--txt3)', textAlign: 'center' }}>No data</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
 
             {/* History */}
             <SectionLabel>Historical Data</SectionLabel>
@@ -567,7 +741,10 @@ export default function Dashboard() {
 
             {/* Footer */}
             <div style={{ marginTop: 32, paddingTop: 16, borderTop: '1px solid var(--border)', textAlign: 'center', fontSize: '0.72rem', color: 'var(--txt3)', fontWeight: 500 }}>
-              UEI Cloud · Unified Energy Interface · {currentNode.node_id ?? '—'}
+              UEI Cloud · Unified Energy Interface ·{' '}
+              {compareMode
+                ? <><span style={{ color: '#e09a20' }}>{selectedId}</span> vs <span style={{ color: '#38bdf8' }}>{compareId}</span></>
+                : currentNode.node_id ?? '—'}
             </div>
           </>
         )}
