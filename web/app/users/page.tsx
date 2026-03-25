@@ -1,9 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import ThemeToggle from '../components/ThemeToggle';
 
 interface User {
   id: number;
+  email: string;
+  role: string;
+  org_name: string;
+}
+
+interface Me {
   email: string;
   role: string;
   org_name: string;
@@ -19,6 +26,14 @@ export default function UsersPage() {
   const [users,   setUsers]   = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
+  const [me,      setMe]      = useState<Me | null>(null);
+
+  useEffect(() => {
+    fetch('/api/auth/me', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setMe(data); })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetch('/api/admin/users', { cache: 'no-store' })
@@ -31,6 +46,11 @@ export default function UsersPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  async function handleLogout() {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    window.location.href = '/';
+  }
+
   // Group by org
   const orgs: Record<string, User[]> = {};
   for (const u of users) {
@@ -38,32 +58,54 @@ export default function UsersPage() {
   }
 
   return (
-    <div style={{ width: '100%', padding: '32px 5vw' }}>
+    <div style={{ width: '100%', padding: '32px 5vw', minHeight: '100vh' }}>
 
       {/* Header */}
       <div style={{ marginBottom: 32 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ height: 3, background: 'linear-gradient(90deg, var(--txt2) 0%, rgba(128,128,120,0.1) 60%, transparent 100%)', borderRadius: 99, marginBottom: 24 }} />
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
+          {/* Brand + badge */}
           <div>
-            <p style={{ fontSize: '0.72rem', fontWeight: 500, color: 'var(--txt3)', margin: '0 0 6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+              <h1 style={{ fontSize: '1.85rem', fontWeight: 800, margin: 0, letterSpacing: '-0.03em', lineHeight: 1, background: 'var(--title-grad)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                UEI Cloud
+              </h1>
+              <span style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--txt)', background: 'var(--surf2)', border: '1px solid var(--border-hi)', padding: '3px 8px', borderRadius: 4 }}>
+                Users
+              </span>
+            </div>
+            <p style={{ fontSize: '0.72rem', fontWeight: 500, color: 'var(--txt3)', margin: 0 }}>
               Unified Energy Interface
             </p>
-            <h1 style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--txt)', margin: 0, letterSpacing: '-0.02em', lineHeight: 1 }}>
-              Registered Users
-            </h1>
           </div>
-          <a
-            href="/dashboard"
-            style={{
-              fontFamily: 'var(--ff-sans)', fontSize: '0.78rem', fontWeight: 600,
-              background: 'transparent', border: '1px solid var(--border)',
-              borderRadius: 6, color: 'var(--txt2)', padding: '7px 16px',
-              cursor: 'pointer', textDecoration: 'none', transition: 'all 0.15s',
-            }}
-          >
-            ← Dashboard
-          </a>
+
+          {/* Right: nav + user + theme */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+            <a
+              href="/dashboard"
+              style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--txt2)', textDecoration: 'none', transition: 'color 0.15s' }}
+              onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = 'var(--txt)'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = 'var(--txt2)'; }}
+            >
+              ← Dashboard
+            </a>
+            {me && (
+              <>
+                <div style={{ width: 1, height: 20, background: 'var(--border)' }} />
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--txt)' }}>{me.email}</div>
+                  <div style={{ fontSize: '0.68rem', color: 'var(--txt3)', marginTop: 2 }}>
+                    {me.org_name} · <span style={{ color: 'var(--accent)', textTransform: 'capitalize' }}>{me.role}</span>
+                  </div>
+                </div>
+              </>
+            )}
+            <ThemeToggle />
+          </div>
         </div>
-        <div style={{ height: 1, background: 'var(--border)', marginTop: 24 }} />
+
+        <div style={{ height: 1, background: 'var(--border)', marginTop: 20 }} />
       </div>
 
       {loading && (
@@ -171,6 +213,24 @@ export default function UsersPage() {
           </div>
         </>
       )}
+
+      {/* Footer: sign out */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 40, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+        <span style={{ fontSize: '0.72rem', color: 'var(--txt3)' }}>UEI Cloud · Unified Energy Interface</span>
+        <button
+          onClick={handleLogout}
+          style={{
+            fontFamily: 'var(--ff-sans)', fontSize: '0.72rem', fontWeight: 600,
+            background: 'transparent', border: '1px solid var(--border)',
+            borderRadius: 6, color: 'var(--txt3)', padding: '5px 14px',
+            cursor: 'pointer', transition: 'all 0.15s',
+          }}
+          onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.color='var(--err)'; b.style.borderColor='rgba(248,113,113,0.3)'; }}
+          onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.color='var(--txt3)'; b.style.borderColor='var(--border)'; }}
+        >
+          Sign out
+        </button>
+      </div>
     </div>
   );
 }
