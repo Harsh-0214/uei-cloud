@@ -181,45 +181,61 @@ export default function LandingPage() {
       <section style={{
         position: 'relative', zIndex: 1,
         width: '100%',
-        padding: '100px 5vw 80px',
+        padding: '110px 5vw 90px',
         textAlign: 'center',
       }}>
 
+        {/* Eyebrow */}
         <div className="anim-fade-up" style={{
-          display: 'inline-flex', alignItems: 'center', gap: 7,
-          background: 'rgba(224,154,32,0.1)', border: '1px solid rgba(224,154,32,0.2)',
-          borderRadius: 99, padding: '4px 14px', marginBottom: 32,
+          display: 'inline-flex', alignItems: 'center', gap: 8,
+          background: 'rgba(224,154,32,0.08)', border: '1px solid rgba(224,154,32,0.22)',
+          borderRadius: 99, padding: '5px 16px', marginBottom: 36,
         }}>
           <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)' }} />
-          <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--accent)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-            Unified Energy Interface
+          <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+            Cloud Platform
           </span>
         </div>
 
+        {/* Main title */}
         <h1 className="anim-fade-up anim-delay-1" style={{
-          fontSize: 'clamp(2.6rem, 7vw, 4.2rem)',
+          fontSize: 'clamp(3.2rem, 10vw, 7rem)',
           fontWeight: 800,
-          lineHeight: 1.08,
-          letterSpacing: '-0.035em',
-          margin: '0 auto 28px',
-          maxWidth: 820,
-          color: 'var(--txt)',
+          lineHeight: 1.0,
+          letterSpacing: '-0.04em',
+          margin: '0 auto 12px',
+          maxWidth: 960,
+          background: 'var(--title-grad)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          backgroundClip: 'text',
         }}>
-          One interface for{' '}
-          <span style={{ color: 'var(--accent)' }}>every energy source.</span>
+          Unified Energy
+        </h1>
+        <h1 className="anim-fade-up anim-delay-2" style={{
+          fontSize: 'clamp(3.2rem, 10vw, 7rem)',
+          fontWeight: 800,
+          lineHeight: 1.0,
+          letterSpacing: '-0.04em',
+          margin: '0 auto 36px',
+          maxWidth: 960,
+          color: 'var(--accent)',
+        }}>
+          Interface.
         </h1>
 
-        <p className="anim-fade-up anim-delay-2" style={{
-          fontSize: '1.1rem', lineHeight: 1.7,
-          color: 'var(--txt2)', margin: '0 auto 44px',
-          maxWidth: 640,
+        {/* Tagline */}
+        <p className="anim-fade-up anim-delay-3" style={{
+          fontSize: 'clamp(1rem, 2vw, 1.2rem)', lineHeight: 1.7,
+          color: 'var(--txt2)', margin: '0 auto 52px',
+          maxWidth: 580,
         }}>
-          UEI Cloud gives your team real-time visibility across solar, wind, battery storage,
-          grid, EV charging, and backup generation — live telemetry, fault detection,
-          and AI-powered analysis in a single platform.
+          Real-time visibility across solar, wind, battery storage, grid, EV charging,
+          and backup generation — live telemetry, fault detection, and AI-powered analysis
+          in a single platform.
         </p>
 
-        <div className="anim-fade-up anim-delay-3" style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+        <div className="anim-fade-up anim-delay-4" style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
           <Link href="/login" style={{
             display: 'inline-block',
             padding: '13px 32px',
