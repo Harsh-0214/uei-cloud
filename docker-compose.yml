@@ -39,20 +39,6 @@ services:
     depends_on:
       - postgres
 
-  web:
-    build: ./django_app
-    container_name: uei-django
-    restart: unless-stopped
-    env_file: .env
-    environment:
-      API_URL: http://api:8000
-      GRAFANA_URL: http://grafana:3000
-    ports:
-      - "8080:8080"
-    depends_on:
-      - api
-      - grafana
-
 volumes:
   pgdata:
   grafana_data:
