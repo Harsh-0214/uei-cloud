@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 
 type Mode = 'login' | 'register';
 
@@ -61,6 +62,27 @@ export default function LoginPage() {
         borderRadius: 12,
         padding: '36px 32px',
       }}>
+        {/* Back to home */}
+        <Link href="/" style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 5,
+          fontSize: '0.75rem',
+          fontWeight: 500,
+          color: 'var(--txt2)',
+          textDecoration: 'none',
+          marginBottom: 24,
+          transition: 'color 0.15s',
+        }}
+          onMouseEnter={e => (e.currentTarget.style.color = 'var(--txt)')}
+          onMouseLeave={e => (e.currentTarget.style.color = 'var(--txt2)')}
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0 }}>
+            <path d="M8.5 2.5L4 7l4.5 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          Back to home
+        </Link>
+
         {/* Header */}
         <div style={{ marginBottom: 28 }}>
           <p style={{ fontSize: '0.72rem', fontWeight: 500, color: 'var(--txt3)', margin: '0 0 4px' }}>
@@ -187,7 +209,7 @@ const labelStyle: React.CSSProperties = {
 
 const inputStyle: React.CSSProperties = {
   width: '100%',
-  background: 'rgba(255,255,255,0.05)',
+  background: 'var(--surf2)',
   border: '1px solid var(--border)',
   borderRadius: 8,
   color: 'var(--txt)',
