@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import ThemeToggle from './components/ThemeToggle';
 
 // ── Energy source data ─────────────────────────────────────────
 
@@ -167,14 +168,17 @@ export default function LandingPage() {
             UEI Cloud
           </span>
         </div>
-        <Link href="/login" style={{
-          fontFamily: 'var(--ff-sans)', fontSize: '0.82rem', fontWeight: 600,
-          color: 'var(--txt2)', textDecoration: 'none', padding: '6px 14px',
-          border: '1px solid var(--border)', borderRadius: 8,
-          transition: 'all 0.15s',
-        }}>
-          Sign in →
-        </Link>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <ThemeToggle />
+          <Link href="/login" style={{
+            fontFamily: 'var(--ff-sans)', fontSize: '0.82rem', fontWeight: 600,
+            color: 'var(--txt2)', textDecoration: 'none', padding: '6px 14px',
+            border: '1px solid var(--border)', borderRadius: 8,
+            transition: 'all 0.15s',
+          }}>
+            Sign in →
+          </Link>
+        </div>
       </nav>
 
       {/* ── Hero ── */}
