@@ -157,7 +157,7 @@ export default function LandingPage() {
         position: 'sticky', top: 0, zIndex: 50,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '0 5vw', height: 60,
-        background: 'rgba(17,17,17,0.85)',
+        background: 'var(--nav-bg)',
         backdropFilter: 'blur(12px)',
         borderBottom: '1px solid var(--border)',
       }}>
@@ -260,7 +260,7 @@ export default function LandingPage() {
         width: '100%',
         borderTop: '1px solid var(--border)',
         borderBottom: '1px solid var(--border)',
-        background: 'rgba(255,255,255,0.015)',
+        background: 'var(--strip-bg)',
         padding: '28px 5vw',
       }}>
         <p style={{ textAlign: 'center', fontSize: '0.68rem', fontWeight: 600, color: 'var(--txt3)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 20 }}>
