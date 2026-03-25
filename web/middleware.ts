@@ -13,10 +13,10 @@ export function middleware(req: NextRequest) {
     }
   }
 
-  // Root path: logged in → /dashboard, not logged in → /login
-  if (pathname === '/') {
+  // Root path: logged in → /dashboard (skip landing page for auth'd users)
+  if (pathname === '/' && token) {
     const url = req.nextUrl.clone();
-    url.pathname = token ? '/dashboard' : '/login';
+    url.pathname = '/dashboard';
     return NextResponse.redirect(url);
   }
 
