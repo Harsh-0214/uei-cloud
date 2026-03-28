@@ -25,7 +25,8 @@ BMS Hardware / Raspberry Pi / Simulator
                     ├─── /login        Login / Register
                     └─── /dashboard    Live telemetry + AI chat
                               │
-                              └─── Claude AI Chatbot  (:8001)
+                              └─── Claude AI Chatbot
+                                        (Next.js API route → Anthropic SDK)
                                         (natural language → SQL)
 ```
 
@@ -58,29 +59,20 @@ uei-cloud/
 │   ├── init.sql              # Full schema — runs automatically on first docker-compose up
 │   └── migrate_auth.sql      # Safe migration for existing DBs (adds auth tables)
 │
-├── django_app/               # Secondary admin dashboard (port 8080)
-│   ├── dashboard/
-│   └── uei/
-│
 ├── web/                      # Next.js frontend (deployed to Vercel)
 │   ├── app/
 │   │   ├── page.tsx          # Landing page  →  uei-cloud.vercel.app/
 │   │   ├── login/page.tsx    # Login + Register
 │   │   ├── dashboard/        # Live dashboard (auth-gated)
-│   │   └── api/              # Next.js API routes (proxy to FastAPI)
+│   │   └── api/              # Next.js API routes (proxy to FastAPI + AI chatbot)
 │   └── vercel.json
-│
-├── chatbot/
-│   ├── main.py               # Claude-powered chatbot API (:8001)
-│   ├── static/index.html     # Web UI
-│   └── requirements.txt
 │
 ├── simulator.py              # Orion Jr2 BMS simulator (configurable rate/node)
 ├── bms_api_simulator.py      # Realistic stateful BMS sim (drift + faults)
-├── BMS_CC.py                 # Static single-packet BMS sender
+├── sim_bms2.py               # BMS Node 2 simulator (charge-cycle, 14S LiFePO4)
+├── sim_bms3.py               # BMS Node 3 simulator (thermal stress + fault derating)
 ├── sim_pv_api.py             # PV system simulator (inverters + loads)
-├── test_pv_csv_to_postgres.py# Bulk-load pv_data.csv into PostgreSQL
-├── pv_data.csv               # Sample PV telemetry (10 rows)
+├── run_all.py                # Launch all 4 simulators concurrently (BMS-1/2/3 + PV)
 ├── docker-compose.yml
 ├── .env.example
 └── README.md
@@ -94,7 +86,7 @@ uei-cloud/
 
 - Google Cloud Compute Engine VM (Debian / Ubuntu)
 - Docker + Docker Compose v2
-- Firewall rules open: `8000` (API), `3000` (Grafana), `8080` (Django)
+- Firewall rules open: `8000` (API), `3000` (Grafana)
 - A `.env` file — copy from `.env.example` and fill in secrets
 
 ### First-time setup
@@ -121,7 +113,7 @@ docker compose up -d api
 After the API container is running:
 
 ```bash
-docker exec uei-cloud-api-1 python seed.py
+docker exec uei-cloud-api python seed.py
 ```
 
 This creates org **Capstone** and user `capstone.uei@gmail.com` / `capstone` with role `superadmin`. Safe to re-run.
@@ -145,7 +137,13 @@ Copy `.env.example` to `.env` and set:
 | `POSTGRES_PASSWORD` | DB password |
 | `SECRET_KEY` | JWT signing secret — **change in production** |
 | `GF_SECURITY_ADMIN_PASSWORD` | Grafana admin password |
-| `ANTHROPIC_API_KEY` | Claude API key for the chatbot |
+
+For the Next.js frontend, set in Vercel environment variables:
+
+| Variable | Description |
+|---|---|
+| `API_URL` | FastAPI backend URL (e.g. `http://34.130.163.154:8000`) |
+| `ANTHROPIC_API_KEY` | Claude API key for the AI chatbot |
 
 ---
 
@@ -271,7 +269,7 @@ URL: `https://uei-cloud.vercel.app`
 
 To deploy: push to `main`. Vercel auto-deploys from `web/`.
 
-Set `API_URL` in Vercel environment variables to point at the FastAPI server.
+Set `API_URL` and `ANTHROPIC_API_KEY` in Vercel environment variables.
 
 ---
 
@@ -298,12 +296,28 @@ ORDER BY ts_utc;
 
 ## Simulators
 
-### `simulator.py` — Orion Jr2 BMS (recommended)
+### `run_all.py` — All simulators at once (recommended)
+
+Launches all 4 simulator threads concurrently so you can see the full dashboard in action.
+
+```bash
+pip install requests
+python run_all.py                              # target http://localhost:8000
+python run_all.py --api-url http://IP:8000     # target deployed VM
+python run_all.py --period 5                   # slower cadence (5s)
+```
+
+Simulates:
+- **BMS-1** (`pi_bms_1`) — mixed discharge / charge
+- **BMS-2** (`bms-node-2`) — charge-cycle from low SOC → full → discharge
+- **BMS-3** (`bms-node-3`) — thermal stress, overtemp faults + CCL/DCL derating
+- **PV-1** (`pi_pv_1`) — solar inverter output + load channels
+
+### `simulator.py` — Orion Jr2 BMS (standalone)
 
 Stateful 4S LiFePO₄ model with coulomb counting, cell imbalance, and temperature-triggered fault/derate logic.
 
 ```bash
-pip install requests
 python simulator.py --hz 1 --post-url http://34.130.163.154:8000/telemetry
 # Options: --node-id, --bms-id, --soc-start
 ```
@@ -316,12 +330,22 @@ Sends every 2 s. ~1 % fault injection per cycle, 15 % per-cycle recovery chance.
 python bms_api_simulator.py
 ```
 
-### `BMS_CC.py` — Static single-packet sender
+### `sim_bms2.py` — Charge-cycle simulator (Node 2)
 
-Posts one fixed telemetry packet on loop (5 s interval). Useful for smoke-testing the ingestion endpoint.
+14S LiFePO₄ pack starting at low SOC (~25%) that charges to full then discharges, cycling continuously.
 
 ```bash
-python BMS_CC.py
+python sim_bms2.py --api-url http://localhost:8000
+python sim_bms2.py --api-url http://IP:8000 --period 5 --soc-start 40
+```
+
+### `sim_bms3.py` — Thermal stress simulator (Node 3)
+
+High-ambient-temp pack that creeps toward overtemperature faults (>60 °C), triggering CCL/DCL derating until the pack cools.
+
+```bash
+python sim_bms3.py --api-url http://localhost:8000
+python sim_bms3.py --api-url http://IP:8000 --period 5
 ```
 
 ### `sim_pv_api.py` — PV system simulator
@@ -332,26 +356,13 @@ Simulates 2 inverters, 4 load channels, and 2 battery voltages. Posts to `/pv/te
 python sim_pv_api.py
 ```
 
-### `test_pv_csv_to_postgres.py` — CSV bulk loader
-
-Loads `pv_data.csv` into PostgreSQL `pv_telemetry` table directly.
-
-```bash
-python test_pv_csv_to_postgres.py
-```
-
 ---
 
 ## AI Chatbot
 
-The chatbot service (`chatbot/`) runs separately on port `8001`. It uses Claude with tool-use to translate natural language questions into SQL queries, executing them read-only against the database.
+The AI assistant is integrated directly into the Next.js frontend (`web/app/api/chat/`). It uses Claude with tool-use to translate natural language questions into SQL queries, executing them read-only against the database via the `/query` API endpoint.
 
-```bash
-cd chatbot
-pip install -r requirements.txt
-cp .env.example .env        # set DATABASE_URL and ANTHROPIC_API_KEY
-python main.py
-```
+No separate service is needed — it runs as a Next.js API route on Vercel, using `ANTHROPIC_API_KEY` set in your Vercel environment.
 
 Example questions the assistant can answer:
 - "What is the current SOC for node pi_bms_1?"
