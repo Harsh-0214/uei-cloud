@@ -26,8 +26,17 @@ SUPERADMIN_EMAIL    = "capstone.uei@gmail.com"
 SUPERADMIN_PASSWORD = "capstone"
 SUPERADMIN_ROLE     = "superadmin"
 
-# Simulator node_ids to register under the Capstone org
-SIMULATOR_NODES = ["bms-node-1", "pi_bms_1", "pi_pv_1", "bms-node-2", "bms-node-3", "pi_bms_4", "pi_bms_5"]
+# Node IDs for all four Pis — real hardware and simulators
+SIMULATOR_NODES = [
+    # Real hardware Pis
+    "pi_bms_real",   # Orion Jr2 BMS via CAN bus
+    "pi_pv_real",    # PV inverter via Modbus TCP
+    # Simulator Pis
+    "pi_bms_sim",    # Simulated BMS
+    "pi_pv_sim",     # Simulated PV
+    # Legacy node IDs kept for backwards compatibility
+    "bms-node-1", "pi_bms_1", "pi_pv_1", "bms-node-2", "bms-node-3",
+]
 
 def main():
     conn = psycopg2.connect(

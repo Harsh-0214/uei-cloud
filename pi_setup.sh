@@ -1,92 +1,177 @@
 #!/usr/bin/env bash
-# pi_setup.sh — Configure a Raspberry Pi to run a UEI BMS simulator and send
-#               data to the cloud dashboard on every boot.
+# pi_setup.sh — Configure a Raspberry Pi to run a UEI telemetry client on boot.
 #
-# Usage:
-#   sudo bash pi_setup.sh --node-id pi_bms_4 --api-url http://<VM_IP>:8000
-#   sudo bash pi_setup.sh --node-id pi_bms_5 --api-url http://<VM_IP>:8000
+# Supports all four Pi roles in the system:
+#
+#   Real BMS  (Orion Jr2 via CAN bus):
+#     sudo bash pi_setup.sh --type bms --mode real --node-id pi_bms_real \
+#                           --api-url http://<VM_IP>:8000
+#
+#   Real PV   (inverter via Modbus TCP):
+#     sudo bash pi_setup.sh --type pv  --mode real --node-id pi_pv_real  \
+#                           --api-url http://<VM_IP>:8000 \
+#                           --modbus-host 192.168.1.100
+#
+#   Simulated BMS:
+#     sudo bash pi_setup.sh --type bms --mode sim  --node-id pi_bms_sim  \
+#                           --api-url http://<VM_IP>:8000
+#
+#   Simulated PV:
+#     sudo bash pi_setup.sh --type pv  --mode sim  --node-id pi_pv_sim   \
+#                           --api-url http://<VM_IP>:8000
 #
 # What this script does:
-#   1. Installs Python 3 and the `requests` library (if not present)
-#   2. Copies simulator.py to /opt/uei/simulator.py
-#   3. Creates a systemd service that auto-starts the simulator on boot
-#   4. Starts the service immediately
+#   1. Installs Python 3, pip, and required libraries
+#   2. For real BMS: configures the SocketCAN interface to come up on boot
+#   3. Copies the client script to /opt/uei/
+#   4. Creates a systemd service that auto-starts on every boot
+#   5. Starts the service immediately
 #
-# After running, the Pi will POST BMS telemetry to the cloud API every 2 seconds.
-# View logs:  journalctl -u uei-simulator -f
+# View logs after setup:
+#   journalctl -u uei-client -f
 
 set -euo pipefail
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
+TYPE=""          # bms | pv
+MODE=""          # sim | real
 NODE_ID=""
 API_URL=""
-HZ="0.5"          # 1 packet every 2 seconds
-BMS_ID=""
+PERIOD="2"
+# BMS real-mode options
+CAN_CHANNEL="can0"
+CAN_BITRATE="500000"
+# PV real-mode options
+MODBUS_HOST=""
+MODBUS_PORT="502"
+
+SERVICE_NAME="uei-client"
+INSTALL_DIR="/opt/uei"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ── Argument parsing ──────────────────────────────────────────────────────────
 usage() {
-    echo "Usage: sudo bash pi_setup.sh --node-id <NODE_ID> --api-url <URL> [--hz <HZ>] [--bms-id <BMS_ID>]"
-    echo ""
-    echo "  --node-id   Unique node identifier, e.g. pi_bms_4 (required)"
-    echo "  --api-url   Cloud API base URL, e.g. http://1.2.3.4:8000 (required)"
-    echo "  --hz        Packets per second (default: 0.5 = 1 packet every 2s)"
-    echo "  --bms-id    BMS hardware ID label (default: OrionJr2_<NODE_ID>)"
+    grep '^#' "$0" | head -30 | sed 's/^# \{0,1\}//'
     exit 1
 }
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --node-id) NODE_ID="$2"; shift 2 ;;
-        --api-url) API_URL="$2"; shift 2 ;;
-        --hz)      HZ="$2";      shift 2 ;;
-        --bms-id)  BMS_ID="$2";  shift 2 ;;
-        *) echo "Unknown argument: $1"; usage ;;
+        --type)         TYPE="$2";         shift 2 ;;
+        --mode)         MODE="$2";         shift 2 ;;
+        --node-id)      NODE_ID="$2";      shift 2 ;;
+        --api-url)      API_URL="$2";      shift 2 ;;
+        --period)       PERIOD="$2";       shift 2 ;;
+        --can-channel)  CAN_CHANNEL="$2";  shift 2 ;;
+        --can-bitrate)  CAN_BITRATE="$2";  shift 2 ;;
+        --modbus-host)  MODBUS_HOST="$2";  shift 2 ;;
+        --modbus-port)  MODBUS_PORT="$2";  shift 2 ;;
+        -h|--help)      usage ;;
+        *) echo "ERROR: Unknown argument: $1"; usage ;;
     esac
 done
 
-[[ -z "$NODE_ID" ]] && { echo "ERROR: --node-id is required"; usage; }
-[[ -z "$API_URL" ]] && { echo "ERROR: --api-url is required"; usage; }
-[[ -z "$BMS_ID"  ]] && BMS_ID="OrionJr2_${NODE_ID}"
+[[ -z "$TYPE"    ]] && { echo "ERROR: --type bms|pv is required";      usage; }
+[[ -z "$MODE"    ]] && { echo "ERROR: --mode sim|real is required";     usage; }
+[[ -z "$NODE_ID" ]] && { echo "ERROR: --node-id is required";           usage; }
+[[ -z "$API_URL" ]] && { echo "ERROR: --api-url is required";           usage; }
 
-TELEMETRY_URL="${API_URL%/}/telemetry"
-INSTALL_DIR="/opt/uei"
-SERVICE_NAME="uei-simulator"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ "$TYPE" != "bms" && "$TYPE" != "pv" ]]; then
+    echo "ERROR: --type must be 'bms' or 'pv'"; usage
+fi
+if [[ "$MODE" != "sim" && "$MODE" != "real" ]]; then
+    echo "ERROR: --mode must be 'sim' or 'real'"; usage
+fi
+if [[ "$TYPE" == "pv" && "$MODE" == "real" && -z "$MODBUS_HOST" ]]; then
+    echo "ERROR: --modbus-host is required for --type pv --mode real"; usage
+fi
+
+# ── Derived values ────────────────────────────────────────────────────────────
+if [[ "$TYPE" == "bms" ]]; then
+    CLIENT_SCRIPT="pi_bms_client.py"
+    EXTRA_ARGS="--can-channel ${CAN_CHANNEL} --can-bitrate ${CAN_BITRATE}"
+else
+    CLIENT_SCRIPT="pi_pv_client.py"
+    EXTRA_ARGS=""
+    [[ -n "$MODBUS_HOST" ]] && EXTRA_ARGS="--modbus-host ${MODBUS_HOST} --modbus-port ${MODBUS_PORT}"
+fi
 
 echo ""
-echo "=== UEI Pi Simulator Setup ==="
+echo "=== UEI Pi Client Setup ==="
+echo "  Type      : $TYPE ($MODE)"
 echo "  Node ID   : $NODE_ID"
-echo "  BMS ID    : $BMS_ID"
-echo "  API URL   : $TELEMETRY_URL"
-echo "  Rate      : ${HZ} Hz"
+echo "  API URL   : $API_URL"
+echo "  Period    : ${PERIOD}s"
+[[ "$TYPE" == "bms" && "$MODE" == "real" ]] && echo "  CAN       : ${CAN_CHANNEL} @ ${CAN_BITRATE} bps"
+[[ "$TYPE" == "pv"  && "$MODE" == "real" ]] && echo "  Modbus    : ${MODBUS_HOST}:${MODBUS_PORT}"
 echo ""
 
-# ── 1. Install dependencies ───────────────────────────────────────────────────
-echo "[1/4] Installing Python 3 and requests..."
+# ── 1. Install Python and dependencies ───────────────────────────────────────
+echo "[1/5] Installing Python 3 and base dependencies..."
 apt-get update -qq
-apt-get install -y -qq python3 python3-pip python3-requests
+apt-get install -y -qq python3 python3-pip
 
-# ── 2. Copy simulator ─────────────────────────────────────────────────────────
-echo "[2/4] Installing simulator to $INSTALL_DIR..."
-mkdir -p "$INSTALL_DIR"
-cp "$SCRIPT_DIR/simulator.py" "$INSTALL_DIR/simulator.py"
-chmod +x "$INSTALL_DIR/simulator.py"
+pip3 install -q requests
 
-# ── 3. Write systemd service ──────────────────────────────────────────────────
-echo "[3/4] Creating systemd service: $SERVICE_NAME..."
+if [[ "$TYPE" == "bms" && "$MODE" == "real" ]]; then
+    echo "      Installing python-can for CAN bus support..."
+    apt-get install -y -qq can-utils python3-can
+    pip3 install -q python-can
+fi
+
+if [[ "$TYPE" == "pv" && "$MODE" == "real" ]]; then
+    echo "      Installing pymodbus for Modbus TCP support..."
+    pip3 install -q pymodbus
+fi
+
+# ── 2. Configure CAN bus (real BMS only) ─────────────────────────────────────
+if [[ "$TYPE" == "bms" && "$MODE" == "real" ]]; then
+    echo "[2/5] Configuring SocketCAN interface ${CAN_CHANNEL}..."
+
+    # Bring up CAN interface now
+    ip link set "${CAN_CHANNEL}" down 2>/dev/null || true
+    ip link set "${CAN_CHANNEL}" up type can bitrate "${CAN_BITRATE}" || {
+        echo "      WARNING: Could not configure ${CAN_CHANNEL}."
+        echo "      Make sure your CAN HAT/module is installed and the Pi has been rebooted."
+    }
+
+    # Persist across reboots via systemd-networkd override
+    NETDEV_FILE="/etc/systemd/network/80-can.network"
+    cat > "$NETDEV_FILE" <<NETEOF
+[Match]
+Name=${CAN_CHANNEL}
+
+[CAN]
+BitRate=${CAN_BITRATE}
+NETEOF
+    systemctl enable systemd-networkd 2>/dev/null || true
+    echo "      CAN network config written to ${NETDEV_FILE}"
+else
+    echo "[2/5] Skipping CAN setup (not needed for ${TYPE}/${MODE})."
+fi
+
+# ── 3. Install client script ──────────────────────────────────────────────────
+echo "[3/5] Installing ${CLIENT_SCRIPT} to ${INSTALL_DIR}..."
+mkdir -p "${INSTALL_DIR}"
+cp "${SCRIPT_DIR}/${CLIENT_SCRIPT}" "${INSTALL_DIR}/${CLIENT_SCRIPT}"
+chmod +x "${INSTALL_DIR}/${CLIENT_SCRIPT}"
+
+# ── 4. Create systemd service ─────────────────────────────────────────────────
+echo "[4/5] Creating systemd service: ${SERVICE_NAME}..."
 cat > "/etc/systemd/system/${SERVICE_NAME}.service" <<EOF
 [Unit]
-Description=UEI BMS Simulator ($NODE_ID)
+Description=UEI ${TYPE^^} Client (${NODE_ID}, ${MODE} mode)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/python3 $INSTALL_DIR/simulator.py \
-    --node-id $NODE_ID \
-    --bms-id $BMS_ID \
-    --post-url $TELEMETRY_URL \
-    --hz $HZ
+ExecStart=/usr/bin/python3 ${INSTALL_DIR}/${CLIENT_SCRIPT} \
+    --mode ${MODE} \
+    --node-id ${NODE_ID} \
+    --api-url ${API_URL} \
+    --period ${PERIOD} \
+    ${EXTRA_ARGS}
 Restart=on-failure
 RestartSec=10
 StandardOutput=journal
@@ -98,19 +183,22 @@ WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable "$SERVICE_NAME"
+systemctl enable "${SERVICE_NAME}"
 
-# ── 4. Start the service ──────────────────────────────────────────────────────
-echo "[4/4] Starting $SERVICE_NAME..."
-systemctl restart "$SERVICE_NAME"
+# ── 5. Start the service ──────────────────────────────────────────────────────
+echo "[5/5] Starting ${SERVICE_NAME}..."
+systemctl restart "${SERVICE_NAME}"
 sleep 2
-systemctl status "$SERVICE_NAME" --no-pager || true
+systemctl status "${SERVICE_NAME}" --no-pager || true
 
 echo ""
-echo "Done! Pi '$NODE_ID' is now sending telemetry to $TELEMETRY_URL"
+echo "Done!"
+echo ""
+echo "  Pi '${NODE_ID}' (${TYPE}, ${MODE}) is sending telemetry to ${API_URL}"
 echo ""
 echo "Useful commands:"
-echo "  journalctl -u $SERVICE_NAME -f        # live logs"
-echo "  systemctl status $SERVICE_NAME         # service status"
-echo "  systemctl stop $SERVICE_NAME           # stop"
-echo "  systemctl disable $SERVICE_NAME        # disable auto-start"
+echo "  journalctl -u ${SERVICE_NAME} -f          # live logs"
+echo "  systemctl status ${SERVICE_NAME}           # service status"
+echo "  systemctl restart ${SERVICE_NAME}          # restart"
+echo "  systemctl stop ${SERVICE_NAME}             # stop"
+echo "  systemctl disable ${SERVICE_NAME}          # disable auto-start"
