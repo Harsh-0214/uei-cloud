@@ -23,6 +23,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import os
 import signal
 import sys
 import time
@@ -33,6 +34,15 @@ try:
     import requests
 except ImportError:
     sys.exit("Missing dependency — run: pip install requests")
+
+# ── Load Carbon algorithm (graceful fallback if algorithms/ not present) ───────
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from algorithms.carbon import CarbonCalculator
+    _CARBON_AVAILABLE = True
+except ImportError:
+    _CARBON_AVAILABLE = False
+    print("[WARN] algorithms/ not found — Carbon disabled")
 
 
 # ── Shared helpers ────────────────────────────────────────────────────────────
@@ -188,7 +198,8 @@ class RealPV:
 # ── Main loop (shared for both modes) ────────────────────────────────────────
 
 def run(args: argparse.Namespace) -> None:
-    url = f"{args.api_url.rstrip('/')}/pv/telemetry"
+    api_base = args.api_url.rstrip("/")
+    url      = f"{api_base}/pv/telemetry"
 
     if args.mode == "sim":
         source: SimPV | RealPV = SimPV()
@@ -199,6 +210,14 @@ def run(args: argparse.Namespace) -> None:
         source = RealPV(host=args.modbus_host, port=args.modbus_port)
         print(f"[PV] Mode: REAL HARDWARE  node={args.node_id}  pv={args.pv_id}  "
               f"modbus={args.modbus_host}:{args.modbus_port}  →  {url}")
+
+    # ── Initialise Carbon algorithm ───────────────────────────────────────────
+    carbon = None
+    if _CARBON_AVAILABLE:
+        carbon = CarbonCalculator(node_id=args.node_id, api_url=api_base)
+        print(f"[PV] Carbon algorithm active")
+    else:
+        print(f"[PV] Running without Carbon algorithm (algorithms/ not found)")
 
     running = True
 
@@ -227,6 +246,11 @@ def run(args: argparse.Namespace) -> None:
         print(f"[{tag}] {payload['ts_utc']}  "
               f"invr1={payload['invr1']}W  invr2={payload['invr2']}W  "
               f"load={total_load:.1f}W  bv1={payload['bv1']}V")
+
+        # ── Carbon — emissions calculator ─────────────────────────────────────
+        if carbon is not None:
+            carbon_result = carbon.compute_pv(data, interval_s=args.period)
+            send_telemetry(f"{api_base}/carbon", carbon_result, retries=1)
 
         elapsed    = time.monotonic() - t0
         sleep_time = max(0.0, args.period - elapsed)

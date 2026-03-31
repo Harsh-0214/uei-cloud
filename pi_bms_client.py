@@ -40,12 +40,13 @@ except ImportError:
 # algorithms/ must be in the same directory as this script (or on sys.path).
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
-    from algorithms.cac import ContextAwareAdaptiveControl
-    from algorithms.rda import RiskIndexedDeratingAlgorithm
+    from algorithms.cac    import ContextAwareAdaptiveControl
+    from algorithms.rda    import RiskIndexedDeratingAlgorithm
+    from algorithms.carbon import CarbonCalculator
     _ALGOS_AVAILABLE = True
 except ImportError:
     _ALGOS_AVAILABLE = False
-    print("[WARN] algorithms/ not found — CAC and RDA disabled")
+    print("[WARN] algorithms/ not found — CAC, RDA and Carbon disabled")
 
 
 # ── Shared helpers ────────────────────────────────────────────────────────────
@@ -251,13 +252,14 @@ def run(args: argparse.Namespace) -> None:
               f"can={args.can_channel}  →  {telem_url}")
 
     # ── Initialise edge algorithms ────────────────────────────────────────────
-    cac = rda = None
+    cac = rda = carbon = None
     if _ALGOS_AVAILABLE:
-        cac = ContextAwareAdaptiveControl(node_id=args.node_id, api_url=api_base)
-        rda = RiskIndexedDeratingAlgorithm()
-        print(f"[BMS] CAC and RDA algorithms active")
+        cac    = ContextAwareAdaptiveControl(node_id=args.node_id, api_url=api_base)
+        rda    = RiskIndexedDeratingAlgorithm()
+        carbon = CarbonCalculator(node_id=args.node_id, api_url=api_base)
+        print(f"[BMS] CAC, RDA, and Carbon algorithms active")
     else:
-        print(f"[BMS] Running without CAC/RDA (algorithms/ not found)")
+        print(f"[BMS] Running without algorithms (algorithms/ not found)")
 
     # Latest RHF SoH estimate — refreshed from cloud every 10 minutes
     soh_estimate      = 100.0
@@ -334,6 +336,11 @@ def run(args: argparse.Namespace) -> None:
                 print(f"[RDA] risk={rda_result['risk_score']}  "
                       f"level={rda_result['derating_level']}  "
                       f"factor={rda_result['derating_factor']}")
+
+        # ── 5. Carbon — emissions calculator ─────────────────────────────────────
+        if carbon is not None:
+            carbon_result = carbon.compute_bms(data, interval_s=args.period)
+            send_telemetry(f"{api_base}/carbon", carbon_result, retries=1)
 
         elapsed    = time.monotonic() - t0
         sleep_time = max(0.0, args.period - elapsed)

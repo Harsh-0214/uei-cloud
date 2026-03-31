@@ -639,6 +639,147 @@ def trigger_rhf(days: int = 30, _admin: dict = Depends(require_admin)) -> Any:
     }
 
 
+# ── Carbon Emissions Calculator endpoints ─────────────────────────────────────
+
+class CarbonEventPacket(BaseModel):
+    ts_utc:           str
+    node_id:          str
+    interval_s:       float = 2.0
+    power_kw:         float = 0.0
+    grid_import_kw:   float = 0.0
+    solar_gen_kw:     float = 0.0
+    co2_g:            float = 0.0
+    co2_avoided_g:    float = 0.0
+    carbon_intensity: float = 400.0
+
+
+@app.post("/carbon")
+def ingest_carbon(pkt: CarbonEventPacket) -> Any:
+    """
+    Ingest a carbon emissions event from an edge Pi device.
+    No authentication required — same pattern as POST /telemetry.
+    """
+    try:
+        ts = datetime.fromisoformat(pkt.ts_utc.replace("Z", "+00:00"))
+    except Exception:
+        raise HTTPException(status_code=422, detail="ts_utc must be ISO8601")
+
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO carbon_events
+                  (ts_utc, node_id, interval_s, power_kw, grid_import_kw,
+                   solar_gen_kw, co2_g, co2_avoided_g, carbon_intensity)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                """,
+                (ts, pkt.node_id, pkt.interval_s, pkt.power_kw, pkt.grid_import_kw,
+                 pkt.solar_gen_kw, pkt.co2_g, pkt.co2_avoided_g, pkt.carbon_intensity),
+            )
+    return {"status": "ok", "node_id": pkt.node_id}
+
+
+@app.get("/carbon/summary")
+def carbon_summary(
+    node_id: Optional[str] = None,
+    range:   str           = "1h",
+    _user:   dict          = Depends(get_current_user),
+) -> Any:
+    """
+    Return aggregated carbon emissions stats for a time range.
+    Optionally filtered to a single node.
+    """
+    interval = RANGE_MAP.get(range, "1 hour")
+
+    if node_id:
+        q = """
+            SELECT
+              COUNT(*)                          AS data_points,
+              COALESCE(SUM(co2_g),          0)  AS total_co2_g,
+              COALESCE(SUM(co2_avoided_g),  0)  AS total_co2_avoided_g,
+              COALESCE(SUM(co2_avoided_g - co2_g), 0) AS net_co2_saved_g,
+              COALESCE(SUM(grid_import_kw * interval_s / 3600), 0) AS total_grid_kwh,
+              COALESCE(SUM(solar_gen_kw   * interval_s / 3600), 0) AS total_solar_kwh,
+              COALESCE(AVG(carbon_intensity), 400) AS avg_carbon_intensity
+            FROM carbon_events
+            WHERE node_id = %s
+              AND ts_utc >= NOW() AT TIME ZONE 'UTC' - INTERVAL %s
+        """
+        params = (node_id, interval)
+    else:
+        q = """
+            SELECT
+              COUNT(*)                          AS data_points,
+              COALESCE(SUM(co2_g),          0)  AS total_co2_g,
+              COALESCE(SUM(co2_avoided_g),  0)  AS total_co2_avoided_g,
+              COALESCE(SUM(co2_avoided_g - co2_g), 0) AS net_co2_saved_g,
+              COALESCE(SUM(grid_import_kw * interval_s / 3600), 0) AS total_grid_kwh,
+              COALESCE(SUM(solar_gen_kw   * interval_s / 3600), 0) AS total_solar_kwh,
+              COALESCE(AVG(carbon_intensity), 400) AS avg_carbon_intensity
+            FROM carbon_events
+            WHERE ts_utc >= NOW() AT TIME ZONE 'UTC' - INTERVAL %s
+        """
+        params = (interval,)
+
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(q, params)
+            row = dict(cur.fetchone())
+
+    total_kwh = float(row["total_grid_kwh"]) + float(row["total_solar_kwh"])
+    row["solar_fraction"] = round(float(row["total_solar_kwh"]) / total_kwh, 3) if total_kwh > 0 else 0.0
+    row["node_id"]        = node_id
+    row["range"]          = range
+    return {k: float(v) if isinstance(v, (int,)) else v for k, v in row.items()}
+
+
+@app.get("/carbon/config/{node_id}")
+def get_carbon_config(node_id: str) -> Any:
+    """
+    Return the carbon intensity config for a node.
+    No auth required — Pi devices call this to set their emission factor.
+    Returns built-in default (400 gCO₂/kWh) if no config row exists.
+    """
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT * FROM carbon_config WHERE node_id = %s", (node_id,))
+            row = cur.fetchone()
+    if row:
+        return dict(row)
+    return {"node_id": node_id, "carbon_intensity": 400.0, "region": "global"}
+
+
+class CarbonConfigUpdate(BaseModel):
+    carbon_intensity: Optional[float] = None
+    region:           Optional[str]   = None
+
+
+@app.patch("/carbon/config/{node_id}")
+def update_carbon_config(
+    node_id: str,
+    req:     CarbonConfigUpdate,
+    _admin:  dict = Depends(require_admin),
+) -> Any:
+    """Update the carbon intensity for a node. Admin only."""
+    fields = {k: v for k, v in req.model_dump().items() if v is not None}
+    if not fields:
+        raise HTTPException(status_code=400, detail="No fields provided")
+    fields["updated_at"] = datetime.now(timezone.utc)
+    set_clause = ", ".join(f"{k} = %({k})s" for k in fields)
+    fields["node_id"] = node_id
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                INSERT INTO carbon_config (node_id, {", ".join(k for k in fields if k not in ("node_id", "updated_at"))})
+                VALUES (%(node_id)s, {", ".join(f"%({k})s" for k in fields if k not in ("node_id", "updated_at"))})
+                ON CONFLICT (node_id) DO UPDATE SET {set_clause}
+                """,
+                fields,
+            )
+    return {"status": "ok", "node_id": node_id}
+
+
 @app.get("/stream/latest")
 async def stream_latest():
     """SSE endpoint — pushes the latest telemetry for all nodes every second."""

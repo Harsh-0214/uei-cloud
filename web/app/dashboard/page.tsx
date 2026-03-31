@@ -71,6 +71,19 @@ interface SohForecast {
   stress_summary?: Record<string, unknown>;
 }
 
+interface CarbonSummary {
+  node_id: string;
+  range: string;
+  co2_g: number;
+  co2_avoided_g: number;
+  net_co2_saved_g: number;
+  total_grid_kwh: number;
+  total_solar_kwh: number;
+  solar_fraction: number;
+  carbon_intensity: number;
+  interval_count: number;
+}
+
 // ── Helpers ────────────────────────────────────────────────────
 
 function fmt(v: number | undefined | null, d = 1): string {
@@ -203,9 +216,10 @@ export default function Dashboard() {
   const [compareMode, setCompareMode] = useState(false);
   const [compareId,   setCompareId]   = useState('');
 
-  const [cacOutput,  setCacOutput]  = useState<CacOutput | null>(null);
-  const [rdaOutput,  setRdaOutput]  = useState<RdaOutput | null>(null);
-  const [forecast,   setForecast]   = useState<SohForecast | null>(null);
+  const [cacOutput,     setCacOutput]     = useState<CacOutput | null>(null);
+  const [rdaOutput,     setRdaOutput]     = useState<RdaOutput | null>(null);
+  const [forecast,      setForecast]      = useState<SohForecast | null>(null);
+  const [carbonSummary, setCarbonSummary] = useState<CarbonSummary | null>(null);
 
   const [chatOpen,        setChatOpen]        = useState(false);
   const [chatBusy,        setChatBusy]        = useState(false);
@@ -357,6 +371,17 @@ export default function Dashboard() {
     } catch { /* ignore */ }
   }, []);
 
+  const fetchCarbon = useCallback(async (id: string) => {
+    if (!id) return;
+    try {
+      const r = await fetch(`/api/carbon?node_id=${encodeURIComponent(id)}&range=1h`, { cache: 'no-store' });
+      if (r.ok) {
+        const data = await r.json();
+        if (!data.error) setCarbonSummary(data as CarbonSummary);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
   function parseUtcAge(ts_utc: string | undefined | null): number {
     if (!ts_utc) return Infinity;
     // PostgreSQL timestamps arrive as "YYYY-MM-DD HH:MM:SS[.fff]" — no timezone.
@@ -380,6 +405,7 @@ export default function Dashboard() {
         initCharts();
         fetchCharts(rows[0].node_id, '1h');
         fetchAlgo(rows[0].node_id);
+        fetchCarbon(rows[0].node_id);
       }, 50);
     }
   }
@@ -429,6 +455,7 @@ export default function Dashboard() {
         fetchCharts(selectedIdRef.current, timeRangeRef.current,
                     compareModeRef.current ? compareIdRef.current : '');
         fetchAlgo(selectedIdRef.current);
+        fetchCarbon(selectedIdRef.current);
       }
     }, 5000);
 
@@ -462,8 +489,10 @@ export default function Dashboard() {
     setCacOutput(null);
     setRdaOutput(null);
     setForecast(null);
+    setCarbonSummary(null);
     fetchCharts(id, timeRange, compareMode ? compareId : '');
     fetchAlgo(id);
+    fetchCarbon(id);
   }
 
   function handleCompareChange(id: string) {
@@ -933,6 +962,81 @@ export default function Dashboard() {
                         })}
                       </div>
                     )}
+                  </div>
+                </>
+              );
+            })()}
+
+            {/* ── Carbon Emissions ── */}
+            {carbonSummary && (() => {
+              const netSaved   = carbonSummary.net_co2_saved_g;
+              const solarPct   = carbonSummary.solar_fraction * 100;
+              const netColor   = netSaved >= 0 ? 'var(--ok)' : 'var(--err)';
+              const solarColor = solarPct >= 50 ? 'var(--ok)' : solarPct >= 20 ? 'var(--warn)' : 'var(--txt2)';
+              return (
+                <>
+                  <SectionLabel>Carbon Emissions · Last Hour</SectionLabel>
+                  <div style={{ background: 'var(--surf)', border: '1px solid var(--border)', borderRadius: 'var(--r)', padding: '18px 20px', marginBottom: 24 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 16 }}>
+                      {/* CO₂ Emitted */}
+                      <div>
+                        <div style={{ fontSize: '0.62rem', fontWeight: 700, color: 'var(--txt3)', textTransform: 'uppercase', letterSpacing: '0.09em', marginBottom: 6 }}>CO₂ Emitted</div>
+                        <div style={{ fontFamily: 'var(--ff-mono)', fontSize: '1.6rem', fontWeight: 800, color: 'var(--err)', lineHeight: 1 }}>
+                          {(carbonSummary.co2_g / 1000).toFixed(3)}
+                          <span style={{ fontSize: '0.72rem', fontWeight: 500, marginLeft: 4 }}>kg</span>
+                        </div>
+                        <div style={{ fontSize: '0.62rem', color: 'var(--txt3)', marginTop: 4 }}>
+                          {carbonSummary.co2_g.toFixed(1)} g total
+                        </div>
+                      </div>
+                      {/* CO₂ Avoided */}
+                      <div style={{ borderLeft: '1px solid var(--border)', paddingLeft: 16 }}>
+                        <div style={{ fontSize: '0.62rem', fontWeight: 700, color: 'var(--txt3)', textTransform: 'uppercase', letterSpacing: '0.09em', marginBottom: 6 }}>CO₂ Avoided</div>
+                        <div style={{ fontFamily: 'var(--ff-mono)', fontSize: '1.6rem', fontWeight: 800, color: 'var(--ok)', lineHeight: 1 }}>
+                          {(carbonSummary.co2_avoided_g / 1000).toFixed(3)}
+                          <span style={{ fontSize: '0.72rem', fontWeight: 500, marginLeft: 4 }}>kg</span>
+                        </div>
+                        <div style={{ fontSize: '0.62rem', color: 'var(--txt3)', marginTop: 4 }}>
+                          by solar generation
+                        </div>
+                      </div>
+                      {/* Net Impact */}
+                      <div style={{ borderLeft: '1px solid var(--border)', paddingLeft: 16 }}>
+                        <div style={{ fontSize: '0.62rem', fontWeight: 700, color: 'var(--txt3)', textTransform: 'uppercase', letterSpacing: '0.09em', marginBottom: 6 }}>Net Impact</div>
+                        <div style={{ fontFamily: 'var(--ff-mono)', fontSize: '1.6rem', fontWeight: 800, color: netColor, lineHeight: 1 }}>
+                          {netSaved >= 0 ? '+' : ''}{(netSaved / 1000).toFixed(3)}
+                          <span style={{ fontSize: '0.72rem', fontWeight: 500, marginLeft: 4 }}>kg</span>
+                        </div>
+                        <div style={{ fontSize: '0.62rem', color: 'var(--txt3)', marginTop: 4 }}>
+                          {netSaved >= 0 ? 'net saved' : 'net emitted'}
+                        </div>
+                      </div>
+                      {/* Solar Fraction */}
+                      <div style={{ borderLeft: '1px solid var(--border)', paddingLeft: 16 }}>
+                        <div style={{ fontSize: '0.62rem', fontWeight: 700, color: 'var(--txt3)', textTransform: 'uppercase', letterSpacing: '0.09em', marginBottom: 6 }}>Solar Fraction</div>
+                        <div style={{ fontFamily: 'var(--ff-mono)', fontSize: '1.6rem', fontWeight: 800, color: solarColor, lineHeight: 1 }}>
+                          {solarPct.toFixed(1)}
+                          <span style={{ fontSize: '0.72rem', fontWeight: 500, marginLeft: 2 }}>%</span>
+                        </div>
+                        <div style={{ height: 4, borderRadius: 99, background: 'var(--surf2)', marginTop: 8, overflow: 'hidden' }}>
+                          <div style={{ height: '100%', borderRadius: 99, background: solarColor, width: `${Math.min(100, solarPct)}%`, transition: 'width 0.4s ease' }} />
+                        </div>
+                      </div>
+                    </div>
+                    {/* Footer row */}
+                    <div style={{ paddingTop: 12, borderTop: '1px solid var(--border)', display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+                      {[
+                        { label: 'Grid Import', value: carbonSummary.total_grid_kwh.toFixed(4) + ' kWh' },
+                        { label: 'Solar Gen',   value: carbonSummary.total_solar_kwh.toFixed(4) + ' kWh' },
+                        { label: 'Intensity',   value: carbonSummary.carbon_intensity.toFixed(0) + ' gCO₂/kWh' },
+                        { label: 'Intervals',   value: String(carbonSummary.interval_count) },
+                      ].map(({ label, value }) => (
+                        <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <span style={{ fontSize: '0.62rem', color: 'var(--txt3)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{label}</span>
+                          <span style={{ fontFamily: 'var(--ff-mono)', fontSize: '0.82rem', fontWeight: 600, color: 'var(--txt2)' }}>{value}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </>
               );
