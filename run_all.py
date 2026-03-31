@@ -281,6 +281,135 @@ def _run_pv1(api_url: str, period: float) -> None:
             log(MAGENTA, tag, f"{RED}ERROR{R} {exc}")
         _stop.wait(period)
 
+# ── BMS Node 4 — pi_bms_4 — deep discharge recovery ─────────────────────────
+
+def _run_bms4(api_url: str, period: float) -> None:
+    tag = "BMS-4"
+    url = f"{api_url}/telemetry"
+    soc, pack_voltage, pack_current = 10.0, 42.0, 30.0
+    temp_high, temp_low = 26.0, 23.0
+    highest_cell_v, lowest_cell_v = 3.01, 2.95
+    ccl, dcl = 80.0, 120.0
+    fault_active = False
+    faults_cleared_min = 0.0
+    CELLS = 14
+
+    log(CYAN, tag, f"pi_bms_4  →  {url}  (deep discharge recovery: very low SOC → full)")
+    while not _stop.is_set():
+        if soc >= 99.0:
+            pack_current = -15.0
+        elif soc <= 5.0:
+            pack_current = 28.0
+        pack_current = clamp(pack_current + random.uniform(-1.0, 1.0), -60, 60)
+        soc = clamp(soc + pack_current * 0.0008, 0.0, 100.0)
+
+        delta_v = 0.05 if pack_current > 0 else -0.03
+        pack_voltage = clamp(
+            pack_voltage + delta_v * random.uniform(0.5, 1.5) + random.uniform(-0.02, 0.02),
+            40.0, 58.0,
+        )
+        heat = abs(pack_current) * random.uniform(0.001, 0.006)
+        temp_high = clamp(temp_high + random.uniform(-0.05, 0.1) + heat, -20.0, 90.0)
+        temp_low  = clamp(temp_low  + random.uniform(-0.05, 0.08) + heat * 0.7, -20.0, 90.0)
+        if temp_low > temp_high:
+            temp_low = temp_high - 0.5
+        avg = pack_voltage / CELLS
+        highest_cell_v = clamp(avg + random.uniform(0.01, 0.04), 2.5, 4.25)
+        lowest_cell_v  = clamp(avg - random.uniform(0.01, 0.04), 2.5, 4.25)
+        if random.random() < 0.003:
+            fault_active = True
+        if fault_active and random.random() < 0.25:
+            fault_active = False
+            faults_cleared_min = 0.0
+        else:
+            faults_cleared_min += period / 60.0
+
+        pkt = {
+            "ts_utc": utc_now(), "node_id": "pi_bms_4", "bms_id": "OrionJr2_004",
+            "soc": round(soc, 2), "pack_voltage": round(pack_voltage, 3),
+            "pack_current": round(pack_current, 3), "temp_high": round(temp_high, 2),
+            "temp_low": round(temp_low, 2), "ccl": ccl, "dcl": dcl,
+            "fault_active": fault_active,
+            "faults_cleared_min": round(faults_cleared_min, 2),
+            "highest_cell_v": round(highest_cell_v, 3),
+            "lowest_cell_v":  round(lowest_cell_v, 3),
+        }
+        try:
+            post(url, pkt)
+            direction = "CHG" if pack_current >= 0 else "DSC"
+            log(CYAN, tag,
+                f"SOC={pkt['soc']}%  V={pkt['pack_voltage']}  "
+                f"I={pkt['pack_current']:+.2f}A [{direction}]  fault={pkt['fault_active']}")
+        except Exception as exc:
+            log(CYAN, tag, f"{RED}ERROR{R} {exc}")
+        _stop.wait(period)
+
+
+# ── BMS Node 5 — pi_bms_5 — steady-state load with cell imbalance ────────────
+
+def _run_bms5(api_url: str, period: float) -> None:
+    tag = "BMS-5"
+    url = f"{api_url}/telemetry"
+    soc, pack_voltage, pack_current = 60.0, 49.2, -10.0
+    temp_high, temp_low = 35.0, 31.0
+    # Exaggerated cell imbalance for demo purposes
+    highest_cell_v, lowest_cell_v = 3.65, 3.40
+    ccl, dcl = 80.0, 120.0
+    fault_active = False
+    faults_cleared_min = 45.0
+    CELLS = 14
+
+    log(GREEN, tag, f"pi_bms_5  →  {url}  (steady load + cell imbalance drift)")
+    while not _stop.is_set():
+        pack_current = clamp(pack_current + random.uniform(-0.8, 0.8), -40, 10)
+        soc = clamp(soc + pack_current * 0.0005, 0.0, 100.0)
+        if soc < 15.0:
+            soc = 60.0
+            pack_current = -10.0
+
+        sag = abs(pack_current) * random.uniform(0.0008, 0.0016)
+        pack_voltage = clamp(
+            pack_voltage + (-sag if pack_current < 0 else sag * 0.6) + random.uniform(-0.02, 0.02),
+            40.0, 58.0,
+        )
+        heat = abs(pack_current) * random.uniform(0.001, 0.009)
+        temp_high = clamp(temp_high + random.uniform(-0.05, 0.1) + heat, -20.0, 90.0)
+        temp_low  = clamp(temp_low  + random.uniform(-0.05, 0.08) + heat * 0.6, -20.0, 90.0)
+        if temp_low > temp_high:
+            temp_low = temp_high - 0.5
+        avg = pack_voltage / CELLS
+        # Imbalance drifts slowly: highest climbs, lowest lags
+        highest_cell_v = clamp(highest_cell_v + random.uniform(-0.005, 0.015), avg, 4.25)
+        lowest_cell_v  = clamp(lowest_cell_v  + random.uniform(-0.015, 0.005), 2.5, avg)
+        if random.random() < 0.004:
+            fault_active = True
+        if fault_active and random.random() < 0.18:
+            fault_active = False
+            faults_cleared_min = 0.0
+        else:
+            faults_cleared_min += period / 60.0
+
+        pkt = {
+            "ts_utc": utc_now(), "node_id": "pi_bms_5", "bms_id": "OrionJr2_005",
+            "soc": round(soc, 2), "pack_voltage": round(pack_voltage, 3),
+            "pack_current": round(pack_current, 3), "temp_high": round(temp_high, 2),
+            "temp_low": round(temp_low, 2), "ccl": ccl, "dcl": dcl,
+            "fault_active": fault_active,
+            "faults_cleared_min": round(faults_cleared_min, 2),
+            "highest_cell_v": round(highest_cell_v, 3),
+            "lowest_cell_v":  round(lowest_cell_v, 3),
+        }
+        try:
+            post(url, pkt)
+            imbalance = highest_cell_v - lowest_cell_v
+            log(GREEN, tag,
+                f"SOC={pkt['soc']}%  V={pkt['pack_voltage']}  "
+                f"I={pkt['pack_current']:+.2f}A  ΔCell={imbalance:.3f}V  fault={pkt['fault_active']}")
+        except Exception as exc:
+            log(GREEN, tag, f"{RED}ERROR{R} {exc}")
+        _stop.wait(period)
+
+
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 _SIMS = [
@@ -288,6 +417,8 @@ _SIMS = [
     ("BMS-2", _run_bms2, GREEN),
     ("BMS-3", _run_bms3, YELLOW),
     ("PV-1",  _run_pv1,  MAGENTA),
+    ("BMS-4", _run_bms4, CYAN),
+    ("BMS-5", _run_bms5, GREEN),
 ]
 
 
@@ -312,6 +443,8 @@ def main() -> None:
     print(f"  {GREEN}{B}BMS-2{R}  bms-node-2  — charging cycle (low SOC → full → discharge)")
     print(f"  {YELLOW}{B}BMS-3{R}  bms-node-3  — thermal stress, overtemp faults + CCL/DCL derating")
     print(f"  {MAGENTA}{B}PV-1 {R}  pi_pv_1     — solar inverter output + load channels")
+    print(f"  {CYAN}{B}BMS-4{R}  pi_bms_4    — deep discharge recovery (very low SOC → full)")
+    print(f"  {GREEN}{B}BMS-5{R}  pi_bms_5    — steady load + cell imbalance drift")
     print(f"\nPress {B}Ctrl+C{R} to stop.\n")
 
     threads = []

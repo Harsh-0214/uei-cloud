@@ -27,7 +27,7 @@ SUPERADMIN_PASSWORD = "capstone"
 SUPERADMIN_ROLE     = "superadmin"
 
 # Simulator node_ids to register under the Capstone org
-SIMULATOR_NODES = ["bms-node-1", "pi_bms_1", "pi_pv_1", "bms-node-2", "bms-node-3"]
+SIMULATOR_NODES = ["bms-node-1", "pi_bms_1", "pi_pv_1", "bms-node-2", "bms-node-3", "pi_bms_4", "pi_bms_5"]
 
 def main():
     conn = psycopg2.connect(
