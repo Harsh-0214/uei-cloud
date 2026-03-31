@@ -463,6 +463,182 @@ def query(req: QueryRequest) -> Any:
     return [dict(r) for r in rows]
 
 
+# ── Node config — operational profiles (CAC fallback source) ─────────────────
+
+class NodeConfigUpdate(BaseModel):
+    max_charge_current:    Optional[float] = None
+    max_discharge_current: Optional[float] = None
+    temp_warn_threshold:   Optional[float] = None
+    temp_fault_threshold:  Optional[float] = None
+    soc_high_threshold:    Optional[float] = None
+    soc_low_threshold:     Optional[float] = None
+
+
+@app.get("/config/{node_id}")
+def get_node_config(node_id: str) -> Any:
+    """
+    Return the operational profile for a node.
+    No auth required — Pi devices call this to populate the CAC cache.
+    Returns built-in defaults if no custom config exists for this node.
+    """
+    defaults = {
+        "node_id": node_id,
+        "max_charge_current":    80.0,
+        "max_discharge_current": 120.0,
+        "temp_warn_threshold":   45.0,
+        "temp_fault_threshold":  60.0,
+        "soc_high_threshold":    90.0,
+        "soc_low_threshold":     20.0,
+    }
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT * FROM node_config WHERE node_id = %s", (node_id,))
+            row = cur.fetchone()
+    if row:
+        return dict(row)
+    return defaults
+
+
+@app.patch("/config/{node_id}", status_code=200)
+def update_node_config(
+    node_id: str,
+    req: NodeConfigUpdate,
+    _admin: dict = Depends(require_admin),
+) -> Any:
+    """Update the operational profile for a node. Admin only."""
+    fields = {k: v for k, v in req.model_dump().items() if v is not None}
+    if not fields:
+        raise HTTPException(status_code=400, detail="No fields to update")
+
+    set_clause = ", ".join(f"{k} = %({k})s" for k in fields)
+    fields["node_id"] = node_id
+    fields["updated_at"] = datetime.now(timezone.utc)
+
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                INSERT INTO node_config (node_id, {", ".join(k for k in fields if k not in ("node_id", "updated_at"))})
+                VALUES (%(node_id)s, {", ".join(f"%({k})s" for k in fields if k not in ("node_id", "updated_at"))})
+                ON CONFLICT (node_id) DO UPDATE SET {set_clause}, updated_at = %(updated_at)s
+                """,
+                fields,
+            )
+    return {"status": "ok", "node_id": node_id, "updated": list(req.model_dump(exclude_none=True).keys())}
+
+
+# ── Algorithm events — edge algorithm outputs (CAC / RDA) ────────────────────
+
+class AlgoEventPacket(BaseModel):
+    ts_utc:  str
+    node_id: str
+    algo:    str   # 'CAC' | 'RDA'
+    output:  dict  # algorithm-specific payload
+
+
+@app.post("/algo")
+def ingest_algo_event(pkt: AlgoEventPacket) -> Any:
+    """
+    Ingest a CAC or RDA algorithm output from an edge Pi device.
+    No authentication required — same pattern as /telemetry.
+    """
+    try:
+        ts = datetime.fromisoformat(pkt.ts_utc.replace("Z", "+00:00"))
+    except Exception:
+        raise HTTPException(status_code=422, detail="ts_utc must be ISO8601")
+
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO algo_events (ts_utc, node_id, algo, output) VALUES (%s, %s, %s, %s::jsonb)",
+                (ts, pkt.node_id, pkt.algo.upper(), json.dumps(pkt.output)),
+            )
+    return {"status": "ok", "node_id": pkt.node_id, "algo": pkt.algo}
+
+
+@app.get("/algo/latest")
+def algo_latest(
+    node_id: Optional[str] = None,
+    algo: Optional[str]    = None,
+    _user: dict            = Depends(get_current_user),
+) -> Any:
+    """
+    Return the most recent algorithm event per (node_id, algo) combination.
+    Optionally filter by node_id and/or algo name. Requires authentication.
+    """
+    where_parts = []
+    params: list = []
+    if node_id:
+        where_parts.append("node_id = %s")
+        params.append(node_id)
+    if algo:
+        where_parts.append("algo = %s")
+        params.append(algo.upper())
+
+    where = ("WHERE " + " AND ".join(where_parts)) if where_parts else ""
+
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                f"""
+                SELECT DISTINCT ON (node_id, algo) *
+                FROM algo_events
+                {where}
+                ORDER BY node_id, algo, ts_utc DESC
+                """,
+                params,
+            )
+            rows = cur.fetchall()
+
+    return [dict(r) for r in rows]
+
+
+# ── SoH forecasts — RHF outputs ───────────────────────────────────────────────
+
+@app.get("/forecast")
+def get_forecast(
+    node_id: Optional[str] = None,
+    _user: dict            = Depends(get_current_user),
+) -> Any:
+    """
+    Return the latest RHF SoH forecast for all nodes (or a specific node).
+    Forecasts are written by rhf_job.py.
+    """
+    if node_id:
+        q      = "SELECT * FROM soh_forecast WHERE node_id = %s ORDER BY computed_at DESC LIMIT 1"
+        params = (node_id,)
+    else:
+        q      = "SELECT DISTINCT ON (node_id) * FROM soh_forecast ORDER BY node_id, computed_at DESC"
+        params = None
+
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(q, params) if params else cur.execute(q)
+            rows = cur.fetchall()
+
+    if node_id and not rows:
+        raise HTTPException(status_code=404, detail="No forecast found for this node")
+    return rows[0] if node_id else [dict(r) for r in rows]
+
+
+@app.post("/algo/rhf/run", status_code=202)
+def trigger_rhf(days: int = 30, _admin: dict = Depends(require_admin)) -> Any:
+    """
+    Trigger the RHF job synchronously for all active nodes (admin only).
+    For large datasets prefer running rhf_job.py directly via docker exec.
+    """
+    import subprocess
+    result = subprocess.run(
+        ["python", "rhf_job.py", "--days", str(days)],
+        capture_output=True, text=True, timeout=120,
+    )
+    return {
+        "status": "ok" if result.returncode == 0 else "error",
+        "stdout": result.stdout[-4000:],
+        "stderr": result.stderr[-2000:],
+    }
+
+
 @app.get("/stream/latest")
 async def stream_latest():
     """SSE endpoint — pushes the latest telemetry for all nodes every second."""

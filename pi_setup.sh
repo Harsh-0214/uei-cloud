@@ -151,10 +151,18 @@ else
 fi
 
 # ── 3. Install client script ──────────────────────────────────────────────────
-echo "[3/5] Installing ${CLIENT_SCRIPT} to ${INSTALL_DIR}..."
+echo "[3/5] Installing ${CLIENT_SCRIPT} and algorithms/ to ${INSTALL_DIR}..."
 mkdir -p "${INSTALL_DIR}"
 cp "${SCRIPT_DIR}/${CLIENT_SCRIPT}" "${INSTALL_DIR}/${CLIENT_SCRIPT}"
 chmod +x "${INSTALL_DIR}/${CLIENT_SCRIPT}"
+
+# Copy the shared algorithms package so CAC and RDA are available on the Pi
+if [[ -d "${SCRIPT_DIR}/algorithms" ]]; then
+    cp -r "${SCRIPT_DIR}/algorithms" "${INSTALL_DIR}/algorithms"
+    echo "      algorithms/ installed (CAC + RDA active)"
+else
+    echo "      WARNING: algorithms/ not found — CAC and RDA will be disabled on this Pi"
+fi
 
 # ── 4. Create systemd service ─────────────────────────────────────────────────
 echo "[4/5] Creating systemd service: ${SERVICE_NAME}..."

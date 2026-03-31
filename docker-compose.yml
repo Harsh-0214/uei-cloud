@@ -24,7 +24,9 @@ services:
       - grafana_data:/var/lib/grafana
 
   api:
-    build: ./api
+    build:
+      context: .
+      dockerfile: api/Dockerfile
     container_name: uei-cloud-api
     restart: unless-stopped
     environment:

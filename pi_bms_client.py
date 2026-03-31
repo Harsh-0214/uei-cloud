@@ -24,6 +24,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import os
 import signal
 import sys
 import time
@@ -34,6 +35,17 @@ try:
     import requests
 except ImportError:
     sys.exit("Missing dependency — run: pip install requests")
+
+# ── Load CAC and RDA algorithms (graceful fallback if algorithms/ not present) ─
+# algorithms/ must be in the same directory as this script (or on sys.path).
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from algorithms.cac import ContextAwareAdaptiveControl
+    from algorithms.rda import RiskIndexedDeratingAlgorithm
+    _ALGOS_AVAILABLE = True
+except ImportError:
+    _ALGOS_AVAILABLE = False
+    print("[WARN] algorithms/ not found — CAC and RDA disabled")
 
 
 # ── Shared helpers ────────────────────────────────────────────────────────────
@@ -226,15 +238,40 @@ class RealBMS:
 # ── Main loop (shared for both modes) ────────────────────────────────────────
 
 def run(args: argparse.Namespace) -> None:
-    url = f"{args.api_url.rstrip('/')}/telemetry"
+    api_base  = args.api_url.rstrip("/")
+    telem_url = f"{api_base}/telemetry"
+    algo_url  = f"{api_base}/algo"
 
     if args.mode == "sim":
         source: SimBMS | RealBMS = SimBMS()
-        print(f"[BMS] Mode: SIMULATION   node={args.node_id}  bms={args.bms_id}  →  {url}")
+        print(f"[BMS] Mode: SIMULATION   node={args.node_id}  bms={args.bms_id}  →  {telem_url}")
     else:
         source = RealBMS(channel=args.can_channel, bitrate=args.can_bitrate)
         print(f"[BMS] Mode: REAL HARDWARE  node={args.node_id}  bms={args.bms_id}  "
-              f"can={args.can_channel}  →  {url}")
+              f"can={args.can_channel}  →  {telem_url}")
+
+    # ── Initialise edge algorithms ────────────────────────────────────────────
+    cac = rda = None
+    if _ALGOS_AVAILABLE:
+        cac = ContextAwareAdaptiveControl(node_id=args.node_id, api_url=api_base)
+        rda = RiskIndexedDeratingAlgorithm()
+        print(f"[BMS] CAC and RDA algorithms active")
+    else:
+        print(f"[BMS] Running without CAC/RDA (algorithms/ not found)")
+
+    # Latest RHF SoH estimate — refreshed from cloud every 10 minutes
+    soh_estimate      = 100.0
+    last_soh_fetch    = 0.0
+    SOH_REFRESH_SECS  = 600
+
+    def _refresh_soh() -> float:
+        try:
+            r = requests.get(f"{api_base}/forecast?node_id={args.node_id}", timeout=3)
+            if r.status_code == 200:
+                return float(r.json().get("current_soh", 100.0))
+        except Exception:
+            pass
+        return soh_estimate
 
     running = True
 
@@ -250,18 +287,53 @@ def run(args: argparse.Namespace) -> None:
         t0   = time.monotonic()
         data = source.read(period=args.period) if args.mode == "sim" else source.read()
 
+        # ── 1. Telemetry POST ─────────────────────────────────────────────────
         payload = {
             "ts_utc":  utc_now(),
             "node_id": args.node_id,
             "bms_id":  args.bms_id,
             **data,
         }
-
-        ok = send_telemetry(url, payload)
+        ok  = send_telemetry(telem_url, payload)
         tag = "OK  " if ok else "FAIL"
         print(f"[{tag}] {payload['ts_utc']}  SOC={payload['soc']}%  "
               f"V={payload['pack_voltage']}  I={payload['pack_current']:+.2f}A  "
               f"fault={payload['fault_active']}")
+
+        # ── 2. Refresh SoH estimate periodically ─────────────────────────────
+        now_mono = time.monotonic()
+        if now_mono - last_soh_fetch > SOH_REFRESH_SECS:
+            soh_estimate  = _refresh_soh()
+            last_soh_fetch = now_mono
+
+        # ── 3. CAC — context-aware adaptive control ───────────────────────────
+        if cac is not None:
+            cac_result = cac.compute(data)
+            send_telemetry(
+                algo_url,
+                {"ts_utc": payload["ts_utc"], "node_id": args.node_id,
+                 "algo": "CAC", "output": cac_result},
+                retries=1,
+            )
+            if cac_result["action"] != "NORMAL":
+                print(f"[CAC] action={cac_result['action']}  "
+                      f"limit={cac_result['adjusted_current_limit']}A  "
+                      f"thermal={cac_result['thermal_directive']}  "
+                      f"src={cac_result['profile_source']}")
+
+        # ── 4. RDA — risk-indexed derating ────────────────────────────────────
+        if rda is not None:
+            rda_result = rda.compute(data, soh_estimate=soh_estimate)
+            send_telemetry(
+                algo_url,
+                {"ts_utc": payload["ts_utc"], "node_id": args.node_id,
+                 "algo": "RDA", "output": rda_result},
+                retries=1,
+            )
+            if rda_result["alert_flag"]:
+                print(f"[RDA] risk={rda_result['risk_score']}  "
+                      f"level={rda_result['derating_level']}  "
+                      f"factor={rda_result['derating_factor']}")
 
         elapsed    = time.monotonic() - t0
         sleep_time = max(0.0, args.period - elapsed)
