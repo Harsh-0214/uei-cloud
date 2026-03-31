@@ -43,6 +43,34 @@ interface StreamingState {
   queries: { sql: string; rows: number }[];
 }
 
+interface CacOutput {
+  action: string;
+  adjusted_current_limit: number;
+  thermal_directive: string;
+  profile_source: string;
+  timestamp: string;
+}
+
+interface RdaOutput {
+  risk_score: number;
+  derating_level: string;
+  derating_factor: number;
+  alert_flag: boolean;
+  subscores: Record<string, number>;
+  timestamp: string;
+}
+
+interface SohForecast {
+  node_id: string;
+  bms_id: string;
+  current_soh: number;
+  forecast_30d: number;
+  forecast_60d: number;
+  forecast_90d: number;
+  computed_at: string;
+  stress_summary?: Record<string, unknown>;
+}
+
 // ── Helpers ────────────────────────────────────────────────────
 
 function fmt(v: number | undefined | null, d = 1): string {
@@ -174,6 +202,10 @@ export default function Dashboard() {
   const [stale,       setStale]       = useState(false);
   const [compareMode, setCompareMode] = useState(false);
   const [compareId,   setCompareId]   = useState('');
+
+  const [cacOutput,  setCacOutput]  = useState<CacOutput | null>(null);
+  const [rdaOutput,  setRdaOutput]  = useState<RdaOutput | null>(null);
+  const [forecast,   setForecast]   = useState<SohForecast | null>(null);
 
   const [chatOpen,        setChatOpen]        = useState(false);
   const [chatBusy,        setChatBusy]        = useState(false);
@@ -308,6 +340,23 @@ export default function Dashboard() {
     } catch { /* ignore */ }
   }, []);
 
+  const fetchAlgo = useCallback(async (id: string) => {
+    if (!id) return;
+    try {
+      const [cacResp, rdaResp, fcastResp] = await Promise.allSettled([
+        fetch(`/api/algo/latest?node_id=${encodeURIComponent(id)}&algo=CAC`, { cache: 'no-store' }).then(r => r.ok ? r.json() : null),
+        fetch(`/api/algo/latest?node_id=${encodeURIComponent(id)}&algo=RDA`, { cache: 'no-store' }).then(r => r.ok ? r.json() : null),
+        fetch(`/api/forecast?node_id=${encodeURIComponent(id)}`,             { cache: 'no-store' }).then(r => r.ok ? r.json() : null),
+      ]);
+      if (cacResp.status === 'fulfilled' && Array.isArray(cacResp.value) && cacResp.value[0])
+        setCacOutput(cacResp.value[0].output as CacOutput);
+      if (rdaResp.status === 'fulfilled' && Array.isArray(rdaResp.value) && rdaResp.value[0])
+        setRdaOutput(rdaResp.value[0].output as RdaOutput);
+      if (fcastResp.status === 'fulfilled' && fcastResp.value && !fcastResp.value.error)
+        setForecast(fcastResp.value as SohForecast);
+    } catch { /* ignore */ }
+  }, []);
+
   function parseUtcAge(ts_utc: string | undefined | null): number {
     if (!ts_utc) return Infinity;
     // PostgreSQL timestamps arrive as "YYYY-MM-DD HH:MM:SS[.fff]" — no timezone.
@@ -330,6 +379,7 @@ export default function Dashboard() {
       setTimeout(() => {
         initCharts();
         fetchCharts(rows[0].node_id, '1h');
+        fetchAlgo(rows[0].node_id);
       }, 50);
     }
   }
@@ -375,9 +425,11 @@ export default function Dashboard() {
     connect();
 
     const i2 = setInterval(() => {
-      if (initializedRef.current)
+      if (initializedRef.current) {
         fetchCharts(selectedIdRef.current, timeRangeRef.current,
                     compareModeRef.current ? compareIdRef.current : '');
+        fetchAlgo(selectedIdRef.current);
+      }
     }, 5000);
 
     return () => { es?.close(); clearInterval(i2); };
@@ -407,7 +459,11 @@ export default function Dashboard() {
   function handleNodeChange(id: string) {
     setSelectedId(id);
     clearCharts();
+    setCacOutput(null);
+    setRdaOutput(null);
+    setForecast(null);
     fetchCharts(id, timeRange, compareMode ? compareId : '');
+    fetchAlgo(id);
   }
 
   function handleCompareChange(id: string) {
@@ -728,6 +784,157 @@ export default function Dashboard() {
                     </div>
                   ))}
                 </div>
+              );
+            })()}
+
+            {/* ── Edge Algorithms (CAC + RDA) ── */}
+            {(cacOutput || rdaOutput) && (
+              <>
+                <SectionLabel>Edge Algorithms</SectionLabel>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 24 }}>
+
+                  {/* CAC */}
+                  {cacOutput && (() => {
+                    const actionColor: Record<string, string> = {
+                      NORMAL:               'var(--ok)',
+                      PRIORITIZE_DISCHARGE: '#38bdf8',
+                      CAP_OUTPUT:           'var(--warn)',
+                      TEMP_WARN_DERATE:     'var(--warn)',
+                      OVERTEMP_DERATE:      'var(--err)',
+                      FAULT_DERATE:         'var(--err)',
+                    };
+                    const col = actionColor[cacOutput.action] ?? 'var(--txt2)';
+                    const thermalColor = cacOutput.thermal_directive === 'NONE' ? 'var(--txt3)'
+                      : cacOutput.thermal_directive === 'FAULT_ACTIVE' ? 'var(--err)' : 'var(--warn)';
+                    return (
+                      <div style={{ background: 'var(--surf)', border: '1px solid var(--border)', borderRadius: 'var(--r)', padding: '16px 20px' }}>
+                        <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--txt2)', textTransform: 'uppercase', letterSpacing: '0.09em', marginBottom: 14 }}>
+                          CAC · Adaptive Control
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+                          <span style={{ padding: '3px 10px', borderRadius: 99, fontSize: '0.7rem', fontWeight: 700, background: col + '22', color: col, letterSpacing: '0.03em' }}>
+                            {cacOutput.action.replace(/_/g, ' ')}
+                          </span>
+                          <span style={{ fontSize: '0.65rem', color: 'var(--txt3)', fontFamily: 'var(--ff-mono)' }}>src: {cacOutput.profile_source}</span>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span style={{ fontSize: '0.72rem', color: 'var(--txt2)' }}>Adjusted limit</span>
+                            <span style={{ fontFamily: 'var(--ff-mono)', fontSize: '0.88rem', fontWeight: 700, color: col }}>{cacOutput.adjusted_current_limit} A</span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <span style={{ fontSize: '0.72rem', color: 'var(--txt2)' }}>Thermal directive</span>
+                            <span style={{ fontFamily: 'var(--ff-mono)', fontSize: '0.72rem', fontWeight: 600, color: thermalColor }}>
+                              {cacOutput.thermal_directive.replace(/_/g, ' ')}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* RDA */}
+                  {rdaOutput && (() => {
+                    const rdaColor = rdaOutput.derating_level === 'CRITICAL' ? 'var(--err)'
+                      : rdaOutput.derating_level === 'WARNING' ? 'var(--warn)' : 'var(--ok)';
+                    const rdaBorder = rdaOutput.alert_flag
+                      ? (rdaOutput.derating_level === 'CRITICAL' ? 'rgba(248,113,113,0.35)' : 'rgba(251,146,60,0.35)')
+                      : 'var(--border)';
+                    return (
+                      <div style={{ background: 'var(--surf)', border: `1px solid ${rdaBorder}`, borderRadius: 'var(--r)', padding: '16px 20px' }}>
+                        <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--txt2)', textTransform: 'uppercase', letterSpacing: '0.09em', marginBottom: 14 }}>
+                          RDA · Risk Score
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10 }}>
+                          <span style={{ fontFamily: 'var(--ff-mono)', fontSize: '2rem', fontWeight: 800, color: rdaColor, lineHeight: 1 }}>
+                            {rdaOutput.risk_score}
+                          </span>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--txt3)' }}>/100</span>
+                          <span style={{ padding: '2px 8px', borderRadius: 99, fontSize: '0.66rem', fontWeight: 700, background: rdaColor + '22', color: rdaColor }}>
+                            {rdaOutput.derating_level}
+                          </span>
+                        </div>
+                        <div style={{ height: 5, borderRadius: 99, background: 'var(--surf2)', marginBottom: 12, overflow: 'hidden' }}>
+                          <div style={{ height: '100%', borderRadius: 99, background: rdaColor, width: `${rdaOutput.risk_score}%`, transition: 'width 0.4s ease' }} />
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--txt2)' }}>Power cap</span>
+                          <span style={{ fontFamily: 'var(--ff-mono)', fontSize: '0.95rem', fontWeight: 700, color: rdaColor }}>
+                            {(rdaOutput.derating_factor * 100).toFixed(0)}%
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </>
+            )}
+
+            {/* ── RHF Battery Health Forecast ── */}
+            {forecast && (() => {
+              const soh = forecast.current_soh;
+              const sohColor = soh >= 80 ? 'var(--ok)' : soh >= 60 ? 'var(--warn)' : 'var(--err)';
+              function sohFmtColor(v: number) {
+                return v >= 80 ? 'var(--ok)' : v >= 60 ? 'var(--warn)' : 'var(--err)';
+              }
+              return (
+                <>
+                  <SectionLabel>Battery Health Forecast</SectionLabel>
+                  <div style={{ background: 'var(--surf)', border: '1px solid var(--border)', borderRadius: 'var(--r)', padding: '18px 20px', marginBottom: 24 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 20, alignItems: 'end' }}>
+                      {/* Current SoH */}
+                      <div>
+                        <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--txt2)', textTransform: 'uppercase', letterSpacing: '0.09em', marginBottom: 6 }}>
+                          Current SoH
+                        </div>
+                        <div style={{ fontFamily: 'var(--ff-mono)', fontSize: '2.4rem', fontWeight: 800, color: sohColor, lineHeight: 1 }}>
+                          {soh.toFixed(1)}<span style={{ fontSize: '1rem', fontWeight: 500, marginLeft: 2 }}>%</span>
+                        </div>
+                        <div style={{ fontSize: '0.65rem', color: 'var(--txt3)', marginTop: 6, fontFamily: 'var(--ff-mono)' }}>
+                          last computed {new Date(forecast.computed_at).toLocaleDateString()}
+                        </div>
+                      </div>
+                      {/* Forecasts */}
+                      {([
+                        { label: '30-Day', value: forecast.forecast_30d },
+                        { label: '60-Day', value: forecast.forecast_60d },
+                        { label: '90-Day', value: forecast.forecast_90d },
+                      ] as { label: string; value: number }[]).map(({ label, value }) => (
+                        <div key={label} style={{ borderLeft: '1px solid var(--border)', paddingLeft: 16 }}>
+                          <div style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--txt3)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{label}</div>
+                          <div style={{ fontFamily: 'var(--ff-mono)', fontSize: '1.35rem', fontWeight: 700, color: sohFmtColor(value) }}>
+                            {value.toFixed(1)}<span style={{ fontSize: '0.75rem', fontWeight: 500 }}>%</span>
+                          </div>
+                          <div style={{ fontSize: '0.65rem', color: 'var(--txt3)', marginTop: 4 }}>
+                            Δ {(value - soh).toFixed(2)}%
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {forecast.stress_summary && typeof forecast.stress_summary === 'object' && (
+                      <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border)', display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+                        {[
+                          { k: 'days_analyzed',      label: 'Days analysed' },
+                          { k: 'avg_temp_high',       label: 'Avg temp' },
+                          { k: 'avg_dod',             label: 'Avg DoD' },
+                          { k: 'avg_daily_soh_loss',  label: 'Daily SoH loss' },
+                        ].map(({ k, label }) => {
+                          const raw = (forecast.stress_summary as Record<string, unknown>)[k];
+                          if (raw === undefined) return null;
+                          const n = Number(raw);
+                          return (
+                            <div key={k} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                              <span style={{ fontSize: '0.62rem', color: 'var(--txt3)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{label}</span>
+                              <span style={{ fontFamily: 'var(--ff-mono)', fontSize: '0.82rem', fontWeight: 600, color: 'var(--txt2)' }}>
+                                {k === 'avg_daily_soh_loss' ? n.toFixed(4) + '%' : k === 'avg_temp_high' ? n.toFixed(1) + ' °C' : k === 'avg_dod' ? n.toFixed(1) + '%' : n}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </>
               );
             })()}
 
