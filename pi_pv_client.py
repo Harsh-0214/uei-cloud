@@ -5,19 +5,23 @@ pi_pv_client.py — UEI PV system telemetry client (simulation OR real hardware)
 Runs in two modes controlled by --mode:
 
   sim   Generates realistic simulated PV inverter/load/battery data and POSTs
-        to the cloud API. No hardware required. Same POST logic as real mode.
+        to the cloud API. No hardware required.
 
-  real  Reads live data from a PV inverter and load monitors via Modbus TCP
-        and POSTs to the cloud API.
-        Requires: pip install pymodbus
+  real  Reads live data from a CSV file that your DAQ software overwrites each
+        interval (e.g. the Capstone Solar acquisition script).
 
-        Configure the Modbus register addresses in MODBUS_REGISTERS below to
-        match your specific inverter model (SMA, Fronius, Growatt, Victron, etc.)
+        Expected CSV format (11 columns, header optional):
+          Hr,Min,Sec,Invr1,Invr2,Ld1,Ld2,Ld3,Ld4,BV1,BV2
+        The first three columns (Hr/Min/Sec) are ignored; columns 4-11 are
+        converted from raw analog counts to engineering units:
+          Invr1/2  → ampCalc1  (inverter output current, A)
+          Ld1-4    → ampCalc2  (load current, A)
+          BV1/2    → vltCalc   (battery voltage, V)
 
 Usage:
-  sim:   python3 pi_pv_client.py --mode sim  --node-id pi_pv_sim --api-url http://IP:8000
-  real:  python3 pi_pv_client.py --mode real --node-id pi_pv_real --api-url http://IP:8000
-                                  --modbus-host 192.168.1.100 --modbus-port 502
+  sim:   python3 pi_pv_client.py --mode sim  --node-id pi_pv_sim  --api-url http://IP:8000
+  real:  python3 pi_pv_client.py --mode real --node-id pi_pv_real --api-url http://IP:8000 \\
+                                  --csv-path /home/capstone/Capstone_solar/pv.csv
 """
 
 from __future__ import annotations
@@ -54,7 +58,7 @@ def clamp(x: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, x))
 
 
-# ── Shared sender (identical for sim and real) ────────────────────────────────
+# ── Shared sender ─────────────────────────────────────────────────────────────
 
 def send_telemetry(url: str, payload: dict, retries: int = 3) -> bool:
     """POST one telemetry packet to the cloud API with exponential-backoff retry."""
@@ -111,88 +115,75 @@ class SimPV:
         pass
 
 
-# ── Real PV data source (Modbus TCP) ─────────────────────────────────────────
+# ── Real PV data source (CSV file written by DAQ software) ───────────────────
 
-# ┌─────────────────────────────────────────────────────────────────────────────┐
-# │  CONFIGURE THESE REGISTER ADDRESSES TO MATCH YOUR INVERTER / ENERGY METER  │
-# │                                                                             │
-# │  Common examples:                                                           │
-# │    SMA SunnyBoy:  AC power total = 30775 (int32, ×0.1 W)                  │
-# │    Fronius Symo:  AC power       = 40083 (int16, ×1 W)                    │
-# │    Growatt SPH:   AC power       = 35 (uint16, ×0.1 W)                    │
-# │    Victron MPPT:  PV power       = 789  (uint16, ×1 W)                    │
-# │                                                                             │
-# │  All registers are read as 16-bit unsigned holding registers (FC3) unless  │
-# │  SIGNED is True.  Scale divides the raw integer to get engineering units.  │
-# └─────────────────────────────────────────────────────────────────────────────┘
-MODBUS_REGISTERS = {
-    #  field    register  scale   signed   description
-    "invr1": (  40001,    0.1,    False),  # Inverter 1 AC output power (W)
-    "invr2": (  40002,    0.1,    False),  # Inverter 2 AC output power (W)
-    "ld1":   (  40010,    0.1,    False),  # Load channel 1 power (W)
-    "ld2":   (  40011,    0.1,    False),  # Load channel 2 power (W)
-    "ld3":   (  40012,    0.1,    False),  # Load channel 3 power (W)
-    "ld4":   (  40013,    0.1,    False),  # Load channel 4 power (W)
-    "bv1":   (  40020,    0.01,   False),  # Battery bank 1 voltage (V)
-    "bv2":   (  40021,    0.01,   False),  # Battery bank 2 voltage (V)
-}
+def _safe_float(s: str, default: float = 0.0) -> float:
+    try:
+        return float(s.strip())
+    except ValueError:
+        return default
 
-MODBUS_UNIT_ID = 1  # Modbus slave/unit ID (usually 1)
+def _amp_calc1(raw: float) -> float:
+    """Inverter output current conversion (analog → A)."""
+    return max(0.0, round((raw - 505.625) / 9.6724285104567, 2))
+
+def _amp_calc2(raw: float) -> float:
+    """Load channel current conversion (analog → A)."""
+    return max(0.0, round((raw - 507) / 25.7362355953905, 2))
+
+def _vlt_calc(raw: float) -> float:
+    """Battery voltage conversion (analog → V)."""
+    return max(0.0, round(raw / 56.15546218, 3))
 
 
 class RealPV:
     """
-    Reads PV inverter and load data over Modbus TCP using pymodbus.
+    Reads live PV data from a CSV file that the DAQ software overwrites each
+    interval.  Parses the last non-empty line each call so it always gets the
+    most recent sample even if the file grows rather than being fully replaced.
 
-    Supported hardware (configure MODBUS_REGISTERS above):
-      - Any Modbus TCP capable solar inverter (SMA, Fronius, Growatt, Victron…)
-      - Energy meters with Modbus TCP interface
-      - Modbus TCP gateway connected to RS-485 devices
+    Expected format (11 columns):
+      Hr,Min,Sec,Invr1,Invr2,Ld1,Ld2,Ld3,Ld4,BV1,BV2
 
-    Installation:
-      pip install pymodbus
-
-    Network:
-      The Pi must be on the same LAN as the inverter, or connected via
-      a Modbus TCP gateway.  Most inverters expose port 502 by default.
+    Columns 0-2 (Hr/Min/Sec) are ignored; columns 3-10 are converted.
     """
 
-    def __init__(self, host: str, port: int = 502, unit_id: int = MODBUS_UNIT_ID) -> None:
-        try:
-            from pymodbus.client import ModbusTcpClient as _Client
-        except ImportError:
-            sys.exit("Missing dependency — run: pip install pymodbus")
-        self._Client = _Client
-        self.host    = host
-        self.port    = port
-        self.unit_id = unit_id
-        self.client  = _Client(host=host, port=port)
-        if not self.client.connect():
-            sys.exit(f"[PV] ERROR: Could not connect to Modbus TCP at {host}:{port}")
-        print(f"[PV] Modbus TCP connected: {host}:{port}  unit={unit_id}")
-
-    def _read_register(self, address: int, scale: float, signed: bool) -> float:
-        result = self.client.read_holding_registers(address, count=1, slave=self.unit_id)
-        if result.isError():
-            raise RuntimeError(f"Modbus read error at register {address}: {result}")
-        raw = result.registers[0]
-        if signed and raw > 32767:
-            raw -= 65536
-        return raw * scale
+    def __init__(self, csv_path: str) -> None:
+        if not os.path.exists(csv_path):
+            sys.exit(f"[PV] ERROR: CSV file not found: {csv_path}")
+        self.csv_path = csv_path
+        print(f"[PV] Real mode: reading from {csv_path}")
 
     def read(self) -> dict:
-        data: dict[str, float] = {}
-        for field, (addr, scale, signed) in MODBUS_REGISTERS.items():
-            try:
-                data[field] = round(self._read_register(addr, scale, signed), 3)
-            except Exception as exc:
-                print(f"[WARN] Could not read {field} (reg {addr}): {exc}")
-                data[field] = 0.0
-        return data
+        with open(self.csv_path, "r") as f:
+            lines = [ln.strip() for ln in f if ln.strip()]
+
+        if not lines:
+            raise ValueError("CSV file is empty")
+
+        last = lines[-1]
+        parts = [p.strip() for p in last.split(",")]
+
+        if len(parts) < 11:
+            raise ValueError(f"Expected ≥11 columns, got {len(parts)}: {last!r}")
+
+        # Raw analog counts (columns 3-10, skip Hr/Min/Sec)
+        raw = [_safe_float(p) for p in parts[3:11]]
+        invr1_r, invr2_r, ld1_r, ld2_r, ld3_r, ld4_r, bv1_r, bv2_r = raw
+
+        return {
+            "invr1": _amp_calc1(invr1_r),
+            "invr2": _amp_calc1(invr2_r),
+            "ld1":   _amp_calc2(ld1_r),
+            "ld2":   _amp_calc2(ld2_r),
+            "ld3":   _amp_calc2(ld3_r),
+            "ld4":   _amp_calc2(ld4_r),
+            "bv1":   _vlt_calc(bv1_r),
+            "bv2":   _vlt_calc(bv2_r),
+        }
 
     def close(self) -> None:
-        self.client.close()
-        print("[PV] Modbus TCP connection closed.")
+        pass
 
 
 # ── Main loop (shared for both modes) ────────────────────────────────────────
@@ -205,11 +196,10 @@ def run(args: argparse.Namespace) -> None:
         source: SimPV | RealPV = SimPV()
         print(f"[PV] Mode: SIMULATION   node={args.node_id}  pv={args.pv_id}  →  {url}")
     else:
-        if not args.modbus_host:
-            sys.exit("--modbus-host is required in real mode (e.g. --modbus-host 192.168.1.100)")
-        source = RealPV(host=args.modbus_host, port=args.modbus_port)
-        print(f"[PV] Mode: REAL HARDWARE  node={args.node_id}  pv={args.pv_id}  "
-              f"modbus={args.modbus_host}:{args.modbus_port}  →  {url}")
+        if not args.csv_path:
+            sys.exit("--csv-path is required in real mode (e.g. --csv-path /home/capstone/Capstone_solar/pv.csv)")
+        source = RealPV(csv_path=args.csv_path)
+        print(f"[PV] Mode: REAL HARDWARE  node={args.node_id}  pv={args.pv_id}  →  {url}")
 
     # ── Initialise Carbon algorithm ───────────────────────────────────────────
     carbon = None
@@ -230,8 +220,14 @@ def run(args: argparse.Namespace) -> None:
     signal.signal(signal.SIGTERM, _shutdown)
 
     while running:
-        t0   = time.monotonic()
-        data = source.read()
+        t0 = time.monotonic()
+
+        try:
+            data = source.read()
+        except Exception as exc:
+            print(f"[WARN] Read error: {exc}")
+            time.sleep(args.period)
+            continue
 
         payload = {
             "ts_utc":  utc_now(),
@@ -244,8 +240,8 @@ def run(args: argparse.Namespace) -> None:
         tag = "OK  " if ok else "FAIL"
         total_load = data.get("ld1", 0) + data.get("ld2", 0) + data.get("ld3", 0) + data.get("ld4", 0)
         print(f"[{tag}] {payload['ts_utc']}  "
-              f"invr1={payload['invr1']}W  invr2={payload['invr2']}W  "
-              f"load={total_load:.1f}W  bv1={payload['bv1']}V")
+              f"invr1={payload['invr1']}A  invr2={payload['invr2']}A  "
+              f"load={total_load:.2f}A  bv1={payload['bv1']}V")
 
         # ── Carbon — emissions calculator ─────────────────────────────────────
         if carbon is not None:
@@ -264,20 +260,19 @@ def main() -> None:
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    ap.add_argument("--mode",         choices=["sim", "real"], required=True,
-                    help="'sim' for simulation, 'real' for Modbus TCP hardware")
-    ap.add_argument("--node-id",      required=True,
+    ap.add_argument("--mode",      choices=["sim", "real"], required=True,
+                    help="'sim' for simulation, 'real' for CSV file hardware")
+    ap.add_argument("--node-id",   required=True,
                     help="Unique node identifier registered in the dashboard")
-    ap.add_argument("--api-url",      required=True,
+    ap.add_argument("--api-url",   required=True,
                     help="Cloud API base URL, e.g. http://1.2.3.4:8000")
-    ap.add_argument("--pv-id",        default=None,
+    ap.add_argument("--pv-id",     default=None,
                     help="PV system label (default: pv_<node-id>)")
-    ap.add_argument("--period",       type=float, default=2.0,
-                    help="Seconds between packets (default: 2)")
-    ap.add_argument("--modbus-host",  default=None,
-                    help="Modbus TCP host IP, real mode only (e.g. 192.168.1.100)")
-    ap.add_argument("--modbus-port",  type=int, default=502,
-                    help="Modbus TCP port, real mode only (default: 502)")
+    ap.add_argument("--period",    type=float, default=3.0,
+                    help="Seconds between packets (default: 3, matching DAQ interval)")
+    ap.add_argument("--csv-path",  default=None,
+                    help="Path to the CSV file written by your DAQ software, real mode only "
+                         "(e.g. /home/capstone/Capstone_solar/pv.csv)")
     args = ap.parse_args()
 
     if args.pv_id is None:

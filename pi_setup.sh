@@ -7,10 +7,10 @@
 #     sudo bash pi_setup.sh --type bms --mode real --node-id pi_bms_real \
 #                           --api-url http://<VM_IP>:8000
 #
-#   Real PV   (inverter via Modbus TCP):
+#   Real PV   (CSV file written by DAQ software):
 #     sudo bash pi_setup.sh --type pv  --mode real --node-id pi_pv_real  \
 #                           --api-url http://<VM_IP>:8000 \
-#                           --modbus-host 192.168.1.100
+#                           --csv-path /home/capstone/Capstone_solar/pv.csv
 #
 #   Simulated BMS:
 #     sudo bash pi_setup.sh --type bms --mode sim  --node-id pi_bms_sim  \
@@ -42,8 +42,7 @@ PERIOD="2"
 CAN_CHANNEL="can0"
 CAN_BITRATE="500000"
 # PV real-mode options
-MODBUS_HOST=""
-MODBUS_PORT="502"
+CSV_PATH=""
 
 SERVICE_NAME="uei-client"
 INSTALL_DIR="/opt/uei"
@@ -64,8 +63,7 @@ while [[ $# -gt 0 ]]; do
         --period)       PERIOD="$2";       shift 2 ;;
         --can-channel)  CAN_CHANNEL="$2";  shift 2 ;;
         --can-bitrate)  CAN_BITRATE="$2";  shift 2 ;;
-        --modbus-host)  MODBUS_HOST="$2";  shift 2 ;;
-        --modbus-port)  MODBUS_PORT="$2";  shift 2 ;;
+        --csv-path)     CSV_PATH="$2";     shift 2 ;;
         -h|--help)      usage ;;
         *) echo "ERROR: Unknown argument: $1"; usage ;;
     esac
@@ -82,8 +80,8 @@ fi
 if [[ "$MODE" != "sim" && "$MODE" != "real" ]]; then
     echo "ERROR: --mode must be 'sim' or 'real'"; usage
 fi
-if [[ "$TYPE" == "pv" && "$MODE" == "real" && -z "$MODBUS_HOST" ]]; then
-    echo "ERROR: --modbus-host is required for --type pv --mode real"; usage
+if [[ "$TYPE" == "pv" && "$MODE" == "real" && -z "$CSV_PATH" ]]; then
+    echo "ERROR: --csv-path is required for --type pv --mode real"; usage
 fi
 
 # ── Derived values ────────────────────────────────────────────────────────────
@@ -93,7 +91,7 @@ if [[ "$TYPE" == "bms" ]]; then
 else
     CLIENT_SCRIPT="pi_pv_client.py"
     EXTRA_ARGS=""
-    [[ -n "$MODBUS_HOST" ]] && EXTRA_ARGS="--modbus-host ${MODBUS_HOST} --modbus-port ${MODBUS_PORT}"
+    [[ -n "$CSV_PATH" ]] && EXTRA_ARGS="--csv-path ${CSV_PATH}"
 fi
 
 echo ""
@@ -103,7 +101,7 @@ echo "  Node ID   : $NODE_ID"
 echo "  API URL   : $API_URL"
 echo "  Period    : ${PERIOD}s"
 [[ "$TYPE" == "bms" && "$MODE" == "real" ]] && echo "  CAN       : ${CAN_CHANNEL} @ ${CAN_BITRATE} bps"
-[[ "$TYPE" == "pv"  && "$MODE" == "real" ]] && echo "  Modbus    : ${MODBUS_HOST}:${MODBUS_PORT}"
+[[ "$TYPE" == "pv"  && "$MODE" == "real" ]] && echo "  CSV path  : ${CSV_PATH}"
 echo ""
 
 # ── 1. Install Python and dependencies ───────────────────────────────────────
@@ -119,10 +117,7 @@ if [[ "$TYPE" == "bms" && "$MODE" == "real" ]]; then
     pip3 install -q python-can
 fi
 
-if [[ "$TYPE" == "pv" && "$MODE" == "real" ]]; then
-    echo "      Installing pymodbus for Modbus TCP support..."
-    pip3 install -q pymodbus
-fi
+# No extra deps needed for real PV (CSV file read uses stdlib only)
 
 # ── 2. Configure CAN bus (real BMS only) ─────────────────────────────────────
 if [[ "$TYPE" == "bms" && "$MODE" == "real" ]]; then
