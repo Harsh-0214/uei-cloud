@@ -235,6 +235,35 @@ def register_node(req: NodeRegisterRequest, _admin: dict = Depends(require_admin
 
     return {"status": "ok", "node_id": req.node_id, "org_name": req.org_name}
 
+
+@app.get("/admin/nodes")
+def list_nodes(_admin: dict = Depends(require_admin)):
+    """Return all registered nodes with their org name. Admin only."""
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT n.node_id, o.name AS org_name
+                FROM nodes n
+                JOIN organizations o ON n.organization_id = o.id
+                ORDER BY o.name, n.node_id
+                """
+            )
+            rows = cur.fetchall()
+    return [dict(r) for r in rows]
+
+
+@app.delete("/admin/nodes/{node_id}", status_code=200)
+def delete_node(node_id: str, _admin: dict = Depends(require_admin)):
+    """Remove a node. Admin only."""
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM nodes WHERE node_id = %s RETURNING node_id", (node_id,))
+            if cur.rowcount == 0:
+                raise HTTPException(status_code=404, detail=f"Node '{node_id}' not found")
+    return {"status": "ok", "node_id": node_id}
+
+
 # ── Telemetry ingestion (NO auth — BMS devices post here) ────────────────────
 
 class TelemetryPacket(BaseModel):

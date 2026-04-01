@@ -655,6 +655,11 @@ export default function Dashboard() {
                   onMouseLeave={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.color='var(--txt2)'; a.style.borderColor='var(--border)'; }}>
                   Logs
                 </a>
+                <a href="/nodes" style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--txt2)', textDecoration: 'none', padding: '4px 12px', border: '1px solid var(--border)', borderRadius: 20, transition: 'all 0.15s' }}
+                  onMouseEnter={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.color='var(--txt)'; a.style.borderColor='var(--border-hi)'; }}
+                  onMouseLeave={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.color='var(--txt2)'; a.style.borderColor='var(--border)'; }}>
+                  Nodes
+                </a>
               </div>
               {/* Controls row */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
