@@ -237,6 +237,12 @@ export default function Dashboard() {
   const selectedIdRef  = useRef('');
   const timeRangeRef   = useRef<string>('1h');
   const compareIdRef   = useRef('');
+  // node requested via ?node= URL param (set once on mount)
+  const requestedNodeRef = useRef<string>(
+    typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('node') ?? ''
+      : ''
+  );
   const compareModeRef = useRef(false);
 
   // ── Charts ──────────────────────────────────────────────────
@@ -399,13 +405,17 @@ export default function Dashboard() {
     if (!initializedRef.current) {
       initializedRef.current = true;
       setInitialized(true);
-      setSelectedId(rows[0].node_id);
-      console.log('[UEI] Dashboard initialized with node:', rows[0].node_id);
+      const requested = requestedNodeRef.current;
+      const startNode = (requested && rows.find(r => r.node_id === requested))
+        ? requested
+        : rows[0].node_id;
+      setSelectedId(startNode);
+      console.log('[UEI] Dashboard initialized with node:', startNode);
       setTimeout(() => {
         initCharts();
-        fetchCharts(rows[0].node_id, '1h');
-        fetchAlgo(rows[0].node_id);
-        fetchCarbon(rows[0].node_id);
+        fetchCharts(startNode, '1h');
+        fetchAlgo(startNode);
+        fetchCarbon(startNode);
       }, 50);
     }
   }
@@ -650,6 +660,11 @@ export default function Dashboard() {
                     </span>
                   </div>
                 )}
+                <a href="/overview" style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--txt2)', textDecoration: 'none', padding: '4px 12px', border: '1px solid var(--border)', borderRadius: 20, transition: 'all 0.15s' }}
+                  onMouseEnter={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.color='var(--txt)'; a.style.borderColor='var(--border-hi)'; }}
+                  onMouseLeave={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.color='var(--txt2)'; a.style.borderColor='var(--border)'; }}>
+                  ← Overview
+                </a>
                 <a href="/logs" style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--txt2)', textDecoration: 'none', padding: '4px 12px', border: '1px solid var(--border)', borderRadius: 20, transition: 'all 0.15s' }}
                   onMouseEnter={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.color='var(--txt)'; a.style.borderColor='var(--border-hi)'; }}
                   onMouseLeave={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.color='var(--txt2)'; a.style.borderColor='var(--border)'; }}>
