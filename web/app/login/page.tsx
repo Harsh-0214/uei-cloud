@@ -37,7 +37,7 @@ export default function LoginPage() {
       }
 
       // Cookie is set by the API route (httpOnly) — just redirect
-      window.location.href = '/dashboard';
+      window.location.href = '/overview';
     } catch {
       setError('Network error — could not reach the server.');
     } finally {
