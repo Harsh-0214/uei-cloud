@@ -309,6 +309,109 @@ def ingest(pkt: TelemetryPacket):
 
     return {"status": "ok", "node_id": pkt.node_id}
 
+
+# ── PV Telemetry (NO auth — PV devices post here) ────────────────────────────
+
+class PvPacket(BaseModel):
+    ts_utc:  str
+    node_id: str
+    pv_id:   str
+    invr1:   float = 0.0
+    invr2:   float = 0.0
+    ld1:     float = 0.0
+    ld2:     float = 0.0
+    ld3:     float = 0.0
+    ld4:     float = 0.0
+    bv1:     float = 0.0
+    bv2:     float = 0.0
+
+
+@app.post("/pv/telemetry")
+def ingest_pv(pkt: PvPacket):
+    """Ingest a PV telemetry packet. No authentication required."""
+    try:
+        ts = datetime.fromisoformat(pkt.ts_utc.replace("Z", "+00:00"))
+    except Exception:
+        raise HTTPException(status_code=422, detail="ts_utc must be ISO8601")
+
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO pv_telemetry
+                  (ts_utc, node_id, pv_id, invr1, invr2, ld1, ld2, ld3, ld4, bv1, bv2)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                """,
+                (ts, pkt.node_id, pkt.pv_id,
+                 pkt.invr1, pkt.invr2,
+                 pkt.ld1, pkt.ld2, pkt.ld3, pkt.ld4,
+                 pkt.bv1, pkt.bv2),
+            )
+    return {"status": "ok", "node_id": pkt.node_id}
+
+
+@app.get("/pv/latest")
+def pv_latest(node_id: Optional[str] = None) -> Any:
+    """Return the most recent PV reading per node (or for one node)."""
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            if node_id:
+                cur.execute(
+                    "SELECT * FROM pv_telemetry WHERE node_id = %s ORDER BY ts_utc DESC LIMIT 1",
+                    (node_id,),
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT DISTINCT ON (node_id) *
+                    FROM pv_telemetry
+                    ORDER BY node_id, ts_utc DESC
+                    """
+                )
+            rows = cur.fetchall()
+    return [dict(r) for r in rows]
+
+
+@app.get("/pv/telemetry")
+def pv_history(
+    node_id: Optional[str] = None,
+    range:   str = "1h",
+    limit:   int = 500,
+) -> Any:
+    """Return historical PV telemetry rows filtered by time range."""
+    limit = min(limit, 5000)
+    if range == "all":
+        if node_id:
+            q      = "SELECT * FROM pv_telemetry WHERE node_id = %s ORDER BY ts_utc DESC LIMIT %s"
+            params: tuple = (node_id, limit)
+        else:
+            q      = "SELECT * FROM pv_telemetry ORDER BY ts_utc DESC LIMIT %s"
+            params = (limit,)
+    else:
+        interval = RANGE_MAP.get(range, "1 hour")
+        if node_id:
+            q = """
+                SELECT * FROM pv_telemetry
+                WHERE node_id = %s
+                  AND ts_utc >= NOW() AT TIME ZONE 'UTC' - INTERVAL %s
+                ORDER BY ts_utc DESC LIMIT %s
+            """
+            params = (node_id, interval, limit)
+        else:
+            q = """
+                SELECT * FROM pv_telemetry
+                WHERE ts_utc >= NOW() AT TIME ZONE 'UTC' - INTERVAL %s
+                ORDER BY ts_utc DESC LIMIT %s
+            """
+            params = (interval, limit)
+
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(q, params)
+            rows = cur.fetchall()
+    return [dict(r) for r in rows]
+
+
 # ── Protected data routes ────────────────────────────────────────────────────
 
 RANGE_MAP = {
