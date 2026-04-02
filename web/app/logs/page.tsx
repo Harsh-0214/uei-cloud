@@ -85,6 +85,7 @@ export default function LogsPage() {
   const [loading, setLoading] = useState(true);
   const [lastFetch, setLast]  = useState<string>('');
   const [exporting, setExp]   = useState(false);
+  const [exportingJson, setExpJson] = useState(false);
   const timerRef              = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Auth
@@ -189,6 +190,24 @@ export default function LogsPage() {
       doc.save(`uei-logs-${nodeLabel}-${rangeLabel}.pdf`);
     } finally {
       setExp(false);
+    }
+  };
+
+  // JSON export
+  const exportJson = () => {
+    setExpJson(true);
+    try {
+      const blob = new Blob([JSON.stringify(rows, null, 2)], { type: 'application/json' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      const rangeLabel = range.replace(/\//g, '-');
+      const nodeLabel  = nodeFilter === 'all' ? 'all-nodes' : nodeFilter;
+      a.download = `uei-logs-${nodeLabel}-${rangeLabel}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExpJson(false);
     }
   };
 
@@ -333,6 +352,27 @@ export default function LogsPage() {
             <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/>
           </svg>
           {exporting ? 'Exporting…' : 'Export PDF'}
+        </button>
+
+        <button
+          onClick={exportJson}
+          disabled={exportingJson || rows.length === 0}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 7,
+            padding: '6px 16px', borderRadius: 6,
+            border: '1px solid rgba(56,189,248,0.4)',
+            background: 'rgba(56,189,248,0.06)',
+            color: exportingJson || rows.length === 0 ? 'var(--txt3)' : '#38bdf8',
+            fontSize: '0.78rem', fontWeight: 700,
+            cursor: exportingJson || rows.length === 0 ? 'not-allowed' : 'pointer',
+            transition: 'all 0.15s',
+          }}
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+            <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/>
+          </svg>
+          Export JSON
         </button>
       </div>
 
