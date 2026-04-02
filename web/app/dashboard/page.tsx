@@ -220,6 +220,7 @@ export default function Dashboard() {
   const [rdaOutput,     setRdaOutput]     = useState<RdaOutput | null>(null);
   const [forecast,      setForecast]      = useState<SohForecast | null>(null);
   const [carbonSummary, setCarbonSummary] = useState<CarbonSummary | null>(null);
+  const [nodeOrgMap,    setNodeOrgMap]    = useState<Record<string, string>>({});
 
   const [chatOpen,        setChatOpen]        = useState(false);
   const [chatBusy,        setChatBusy]        = useState(false);
@@ -420,11 +421,22 @@ export default function Dashboard() {
     }
   }
 
-  // Fetch current user on mount
+  // Fetch current user and node→org map on mount
   useEffect(() => {
     fetch('/api/auth/me', { cache: 'no-store' })
       .then(r => r.ok ? r.json() : null)
       .then(data => { if (data) setCurrentUser(data); })
+      .catch(() => {});
+
+    fetch('/api/admin/nodes', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : [])
+      .then((data: { node_id: string; org_name: string }[]) => {
+        if (Array.isArray(data)) {
+          const map: Record<string, string> = {};
+          for (const n of data) map[n.node_id] = n.org_name;
+          setNodeOrgMap(map);
+        }
+      })
       .catch(() => {});
   }, []);
 
@@ -696,6 +708,17 @@ export default function Dashboard() {
                       >
                         {nodes.map(n => <option key={n.node_id} value={n.node_id}>{n.node_id}</option>)}
                       </select>
+                      {/* Org badge */}
+                      {nodeOrgMap[selectedId] && (
+                        <span style={{
+                          fontSize: '0.68rem', fontWeight: 600, letterSpacing: '0.04em',
+                          color: 'var(--accent)', background: 'rgba(224,154,32,0.1)',
+                          border: '1px solid rgba(224,154,32,0.25)',
+                          borderRadius: 4, padding: '2px 8px', whiteSpace: 'nowrap',
+                        }}>
+                          {nodeOrgMap[selectedId]}
+                        </span>
+                      )}
                     </div>
 
                     {/* Compare node selector */}
