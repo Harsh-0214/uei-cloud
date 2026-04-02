@@ -846,13 +846,13 @@ def carbon_summary(
     if node_id:
         q = """
             SELECT
-              COUNT(*)                          AS data_points,
-              COALESCE(SUM(co2_g),          0)  AS total_co2_g,
-              COALESCE(SUM(co2_avoided_g),  0)  AS total_co2_avoided_g,
+              COUNT(*)                          AS interval_count,
+              COALESCE(SUM(co2_g),          0)  AS co2_g,
+              COALESCE(SUM(co2_avoided_g),  0)  AS co2_avoided_g,
               COALESCE(SUM(co2_avoided_g - co2_g), 0) AS net_co2_saved_g,
               COALESCE(SUM(grid_import_kw * interval_s / 3600), 0) AS total_grid_kwh,
               COALESCE(SUM(solar_gen_kw   * interval_s / 3600), 0) AS total_solar_kwh,
-              COALESCE(AVG(carbon_intensity), 400) AS avg_carbon_intensity
+              COALESCE(AVG(carbon_intensity), 400) AS carbon_intensity
             FROM carbon_events
             WHERE node_id = %s
               AND ts_utc >= NOW() AT TIME ZONE 'UTC' - INTERVAL %s
@@ -861,13 +861,13 @@ def carbon_summary(
     else:
         q = """
             SELECT
-              COUNT(*)                          AS data_points,
-              COALESCE(SUM(co2_g),          0)  AS total_co2_g,
-              COALESCE(SUM(co2_avoided_g),  0)  AS total_co2_avoided_g,
+              COUNT(*)                          AS interval_count,
+              COALESCE(SUM(co2_g),          0)  AS co2_g,
+              COALESCE(SUM(co2_avoided_g),  0)  AS co2_avoided_g,
               COALESCE(SUM(co2_avoided_g - co2_g), 0) AS net_co2_saved_g,
               COALESCE(SUM(grid_import_kw * interval_s / 3600), 0) AS total_grid_kwh,
               COALESCE(SUM(solar_gen_kw   * interval_s / 3600), 0) AS total_solar_kwh,
-              COALESCE(AVG(carbon_intensity), 400) AS avg_carbon_intensity
+              COALESCE(AVG(carbon_intensity), 400) AS carbon_intensity
             FROM carbon_events
             WHERE ts_utc >= NOW() AT TIME ZONE 'UTC' - INTERVAL %s
         """
