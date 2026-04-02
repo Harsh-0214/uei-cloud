@@ -188,8 +188,17 @@ function PvNodeCard({ row }: { row: PvRow }) {
   const [hovered, setHovered] = useState(false);
   const ageSec = (Date.now() - parseUtcMs(row.ts_utc)) / 1000;
   const isLive = ageSec < 10;
-  const totalLoad = (row.ld1 ?? 0) + (row.ld2 ?? 0) + (row.ld3 ?? 0) + (row.ld4 ?? 0);
-  const totalInvr = (row.invr1 ?? 0) + (row.invr2 ?? 0);
+  // numeric(10,2) columns arrive as strings from the DB — coerce to number
+  const invr1 = Number(row.invr1 ?? 0);
+  const invr2 = Number(row.invr2 ?? 0);
+  const ld1   = Number(row.ld1   ?? 0);
+  const ld2   = Number(row.ld2   ?? 0);
+  const ld3   = Number(row.ld3   ?? 0);
+  const ld4   = Number(row.ld4   ?? 0);
+  const bv1   = Number(row.bv1   ?? 0);
+  const bv2   = Number(row.bv2   ?? 0);
+  const totalLoad = ld1 + ld2 + ld3 + ld4;
+  const totalInvr = invr1 + invr2;
 
   return (
     <div
@@ -249,12 +258,12 @@ function PvNodeCard({ row }: { row: PvRow }) {
       {/* Metrics grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px 0' }}>
         {[
-          { label: 'Invr 1',   value: row.invr1 != null ? `${row.invr1.toFixed(2)} A`  : '—', color: 'var(--txt)' },
-          { label: 'Invr 2',   value: row.invr2 != null ? `${row.invr2.toFixed(2)} A`  : '—', color: 'var(--txt)' },
-          { label: 'Load',     value: `${totalLoad.toFixed(2)} A`,                              color: 'var(--txt)' },
-          { label: 'Batt V1',  value: row.bv1 != null   ? `${row.bv1.toFixed(2)} V`    : '—', color: 'var(--txt)' },
-          { label: 'Batt V2',  value: row.bv2 != null   ? `${row.bv2.toFixed(2)} V`    : '—', color: 'var(--txt)' },
-          { label: 'Channels', value: '4 ch',                                                   color: 'var(--txt3)' },
+          { label: 'Invr 1',   value: `${invr1.toFixed(2)} A`, color: 'var(--txt)'  },
+          { label: 'Invr 2',   value: `${invr2.toFixed(2)} A`, color: 'var(--txt)'  },
+          { label: 'Load',     value: `${totalLoad.toFixed(2)} A`, color: 'var(--txt)' },
+          { label: 'Batt V1',  value: `${bv1.toFixed(4)} V`,   color: 'var(--txt)'  },
+          { label: 'Batt V2',  value: `${bv2.toFixed(4)} V`,   color: 'var(--txt)'  },
+          { label: 'Channels', value: '4 ch',                   color: 'var(--txt3)' },
         ].map(({ label, value, color }) => (
           <div key={label}>
             <div style={{ fontSize: '0.62rem', color: 'var(--txt3)', fontWeight: 600, letterSpacing: '0.04em', marginBottom: 2 }}>{label}</div>
