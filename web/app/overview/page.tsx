@@ -278,7 +278,7 @@ export default function OverviewPage() {
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
             {/* Nav */}
-            {[{ label: 'Nodes', href: '/nodes' }, { label: 'Logs', href: '/logs' }, { label: 'Users', href: '/users' }].map(({ label, href }) => (
+            {[{ label: 'Nodes', href: '/nodes' }, { label: 'Logs', href: '/logs' }, { label: 'Algorithms', href: '/algorithms' }, { label: 'Users', href: '/users' }].map(({ label, href }) => (
               <a key={href} href={href} style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--txt2)', textDecoration: 'none', transition: 'color 0.15s' }}
                 onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = 'var(--txt)'; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = 'var(--txt2)'; }}>
