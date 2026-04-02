@@ -30,7 +30,7 @@ interface CurrentUser {
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
-const RANGES = ['5m', '15m', '30m', '1h', '6h', '24h'] as const;
+const RANGES = ['5m', '15m', '30m', '1h', '6h', '24h', '7d', '30d', 'all'] as const;
 type Range = typeof RANGES[number];
 
 const COLUMNS = [
@@ -95,12 +95,12 @@ export default function LogsPage() {
       .catch(() => { window.location.href = '/login'; });
   }, []);
 
-  // Fetch available nodes
+  // Fetch all nodes that have ever posted telemetry (persists across disconnects)
   useEffect(() => {
-    fetch('/api/latest')
+    fetch('/api/telemetry/nodes')
       .then(r => r.json())
-      .then((data: TelemetryRow[]) => {
-        if (Array.isArray(data)) setNodes(data.map(r => r.node_id).sort());
+      .then((data: string[]) => {
+        if (Array.isArray(data)) setNodes(data.sort());
       })
       .catch(() => {});
   }, []);
@@ -109,7 +109,7 @@ export default function LogsPage() {
   const fetchLogs = () => {
     const params = new URLSearchParams({ range });
     if (nodeFilter !== 'all') params.set('node_id', nodeFilter);
-    params.set('limit', '2000');
+    params.set('limit', '5000');
 
     fetch(`/api/logs?${params}`)
       .then(r => r.json())
