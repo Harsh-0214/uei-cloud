@@ -135,21 +135,21 @@ function NodeCard({ row, stale }: { row: TelemetryRow; stale: boolean }) {
       <div style={{ marginBottom: 14 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
           <span style={{ fontSize: '0.68rem', fontWeight: 600, color: 'var(--txt3)', letterSpacing: '0.04em' }}>STATE OF CHARGE</span>
-          <span style={{ fontSize: '0.82rem', fontWeight: 700, color: socColor(row.soc), fontFamily: "'DM Mono', monospace" }}>
-            {row.soc.toFixed(1)}%
+          <span style={{ fontSize: '0.82rem', fontWeight: 700, color: socColor(row.soc ?? 0), fontFamily: "'DM Mono', monospace" }}>
+            {row.soc != null ? row.soc.toFixed(1) : '—'}%
           </span>
         </div>
         <div style={{ height: 5, background: 'var(--surf2)', borderRadius: 99, overflow: 'hidden' }}>
-          <div style={{ height: '100%', width: `${Math.min(100, row.soc)}%`, background: socColor(row.soc), borderRadius: 99, transition: 'width 0.4s ease' }} />
+          <div style={{ height: '100%', width: `${Math.min(100, row.soc ?? 0)}%`, background: socColor(row.soc ?? 0), borderRadius: 99, transition: 'width 0.4s ease' }} />
         </div>
       </div>
 
       {/* Key metrics grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px 0' }}>
         {[
-          { label: 'Voltage',  value: `${row.pack_voltage.toFixed(1)} V`,  color: 'var(--txt)' },
-          { label: 'Current',  value: `${row.pack_current.toFixed(1)} A`,  color: 'var(--txt)' },
-          { label: 'Temp',     value: `${row.temp_high.toFixed(1)} °C`,    color: tempColor(row.temp_high) },
+          { label: 'Voltage',  value: row.pack_voltage != null ? `${row.pack_voltage.toFixed(1)} V` : '—',  color: 'var(--txt)' },
+          { label: 'Current',  value: row.pack_current != null ? `${row.pack_current.toFixed(1)} A` : '—',  color: 'var(--txt)' },
+          { label: 'Temp',     value: row.temp_high    != null ? `${row.temp_high.toFixed(1)} °C`   : '—',  color: tempColor(row.temp_high ?? 0) },
         ].map(({ label, value, color }) => (
           <div key={label}>
             <div style={{ fontSize: '0.62rem', color: 'var(--txt3)', fontWeight: 600, letterSpacing: '0.04em', marginBottom: 2 }}>{label}</div>

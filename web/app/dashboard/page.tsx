@@ -937,7 +937,7 @@ export default function Dashboard() {
             )}
 
             {/* ── RHF Battery Health Forecast ── */}
-            {forecast && (() => {
+            {forecast && forecast.current_soh != null && (() => {
               const soh = forecast.current_soh;
               const sohColor = soh >= 80 ? 'var(--ok)' : soh >= 60 ? 'var(--warn)' : 'var(--err)';
               function sohFmtColor(v: number) {
@@ -965,14 +965,14 @@ export default function Dashboard() {
                         { label: '30-Day', value: forecast.forecast_30d },
                         { label: '60-Day', value: forecast.forecast_60d },
                         { label: '90-Day', value: forecast.forecast_90d },
-                      ] as { label: string; value: number }[]).map(({ label, value }) => (
+                      ] as { label: string; value: number | undefined }[]).map(({ label, value }) => (
                         <div key={label} style={{ borderLeft: '1px solid var(--border)', paddingLeft: 16 }}>
                           <div style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--txt3)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{label}</div>
-                          <div style={{ fontFamily: 'var(--ff-mono)', fontSize: '1.35rem', fontWeight: 700, color: sohFmtColor(value) }}>
-                            {value.toFixed(1)}<span style={{ fontSize: '0.75rem', fontWeight: 500 }}>%</span>
+                          <div style={{ fontFamily: 'var(--ff-mono)', fontSize: '1.35rem', fontWeight: 700, color: value != null ? sohFmtColor(value) : 'var(--txt3)' }}>
+                            {value != null ? value.toFixed(1) : '—'}<span style={{ fontSize: '0.75rem', fontWeight: 500 }}>%</span>
                           </div>
                           <div style={{ fontSize: '0.65rem', color: 'var(--txt3)', marginTop: 4 }}>
-                            Δ {(value - soh).toFixed(2)}%
+                            Δ {value != null ? (value - soh).toFixed(2) : '—'}%
                           </div>
                         </div>
                       ))}
