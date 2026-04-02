@@ -176,6 +176,7 @@ export default function OverviewPage() {
   const [me,         setMe]         = useState<Me | null>(null);
   const [lastUpdate, setLastUpdate] = useState<string>('');
   const [stale,      setStale]      = useState(false);
+  const [carbon,     setCarbon]     = useState<Record<string, unknown> | null>(null);
 
   const esRef = useRef<EventSource | null>(null);
 
@@ -197,6 +198,16 @@ export default function OverviewPage() {
     } catch { /* ignore */ }
   }
 
+  async function fetchCarbon() {
+    try {
+      const r = await fetch('/api/carbon?range=1h', { cache: 'no-store' });
+      if (r.ok) {
+        const data = await r.json();
+        if (!data.error) setCarbon(data as Record<string, unknown>);
+      }
+    } catch { /* ignore */ }
+  }
+
   useEffect(() => {
     fetch('/api/auth/me', { cache: 'no-store' })
       .then(r => r.ok ? r.json() : null)
@@ -204,7 +215,9 @@ export default function OverviewPage() {
       .catch(() => {});
 
     fetchLogs();
+    fetchCarbon();
     const logInterval = setInterval(fetchLogs, 10000);
+    const carbonInterval = setInterval(fetchCarbon, 30000);
 
     function connect() {
       const es = new EventSource('/api/stream');
@@ -228,6 +241,7 @@ export default function OverviewPage() {
     return () => {
       esRef.current?.close();
       clearInterval(logInterval);
+      clearInterval(carbonInterval);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -383,6 +397,56 @@ export default function OverviewPage() {
           </div>
         )}
       </div>
+
+      {/* Carbon Emissions */}
+      {carbon && (() => {
+        const co2_g         = Number(carbon.co2_g         ?? carbon.total_co2_g         ?? 0);
+        const co2_avoided_g = Number(carbon.co2_avoided_g ?? carbon.total_co2_avoided_g ?? 0);
+        const net           = Number(carbon.net_co2_saved_g ?? 0);
+        const gridKwh       = Number(carbon.total_grid_kwh ?? 0);
+        const solarKwh      = Number(carbon.total_solar_kwh ?? 0);
+        const intensity     = Number(carbon.carbon_intensity ?? carbon.avg_carbon_intensity ?? 400);
+        const solarFrac     = Number(carbon.solar_fraction ?? 0);
+        const solarPct      = solarFrac * 100;
+        const netColor   = net >= 0 ? 'var(--ok)' : 'var(--err)';
+        const solarColor = solarPct >= 50 ? 'var(--ok)' : solarPct >= 20 ? 'var(--warn)' : 'var(--txt2)';
+        return (
+          <>
+            <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--txt3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 14 }}>
+              Carbon Emissions · All nodes · last hour
+            </div>
+            <div style={{ background: 'var(--surf)', border: '1px solid var(--border)', borderRadius: 'var(--r)', padding: '18px 20px', marginBottom: 40 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 16, marginBottom: 16 }}>
+                {[
+                  { label: 'CO₂ Emitted',  value: (co2_g / 1000).toFixed(3),         unit: 'kg',  sub: `${co2_g.toFixed(1)} g total`,         color: 'var(--err)' },
+                  { label: 'CO₂ Avoided',  value: (co2_avoided_g / 1000).toFixed(3),  unit: 'kg',  sub: 'by solar generation',                  color: 'var(--ok)'  },
+                  { label: 'Net Impact',   value: `${net >= 0 ? '+' : ''}${(net / 1000).toFixed(3)}`, unit: 'kg', sub: net >= 0 ? 'net saved' : 'net emitted', color: netColor },
+                  { label: 'Solar Fraction', value: solarPct.toFixed(1),              unit: '%',   sub: `${solarKwh.toFixed(3)} kWh solar`,     color: solarColor },
+                ].map(({ label, value, unit, sub, color }, i) => (
+                  <div key={label} style={{ borderLeft: i > 0 ? '1px solid var(--border)' : 'none', paddingLeft: i > 0 ? 16 : 0 }}>
+                    <div style={{ fontSize: '0.62rem', fontWeight: 700, color: 'var(--txt3)', textTransform: 'uppercase', letterSpacing: '0.09em', marginBottom: 6 }}>{label}</div>
+                    <div style={{ fontFamily: "'DM Mono', monospace", fontSize: '1.5rem', fontWeight: 800, color, lineHeight: 1 }}>
+                      {value}<span style={{ fontSize: '0.72rem', fontWeight: 500, marginLeft: 3 }}>{unit}</span>
+                    </div>
+                    <div style={{ fontSize: '0.62rem', color: 'var(--txt3)', marginTop: 4 }}>{sub}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ paddingTop: 12, borderTop: '1px solid var(--border)', display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+                {[
+                  { label: 'Grid Import', value: gridKwh.toFixed(4) + ' kWh' },
+                  { label: 'Intensity',   value: intensity.toFixed(0) + ' gCO₂/kWh' },
+                ].map(({ label, value }) => (
+                  <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <span style={{ fontSize: '0.62rem', color: 'var(--txt3)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{label}</span>
+                    <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '0.82rem', fontWeight: 600, color: 'var(--txt2)' }}>{value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        );
+      })()}
 
       {/* Footer */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, borderTop: '1px solid var(--border)' }}>
