@@ -80,7 +80,7 @@ CELLS      = 14
 FAULT_TEMP = 60.0   # °C — triggers fault + derating
 CLEAR_TEMP = 52.0   # °C — fault clears below this
 
-def run(node_id: str, bms_id: str, period: float) -> None:
+def run(node_id: str = "bms_1", bms_id: str = "bms_1", period: float = 2.0) -> None:
     soc, pack_voltage, pack_current = 68.0, 50.4, -24.0
     temp_high, temp_low = 53.0, 48.0
     ccl, dcl = 80.0, 120.0
@@ -213,8 +213,8 @@ def run(node_id: str, bms_id: str, period: float) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--node",   default="pi_bms_1",     help="node_id reported to the DB")
-    ap.add_argument("--bms-id", default="OrionJr2_001", help="bms_id reported to the DB")
+    ap.add_argument("--node",   default="bms_1", help="node_id reported to the DB")
+    ap.add_argument("--bms-id", default="bms_1", help="bms_id reported to the DB")
     ap.add_argument("--period", type=float, default=2.0,
                     help="Seconds between readings (default: 2)")
     args = ap.parse_args()

@@ -1,0 +1,2 @@
+host,port,dbname,user,password
+34.130.163.154,5432,uei,uei,uei_password
