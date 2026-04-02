@@ -20,6 +20,20 @@ interface TelemetryRow {
   lowest_cell_v:     number;
 }
 
+interface PvRow {
+  node_id: string;
+  pv_id:   string;
+  ts_utc:  string;
+  invr1:   number;
+  invr2:   number;
+  ld1:     number;
+  ld2:     number;
+  ld3:     number;
+  ld4:     number;
+  bv1:     number;
+  bv2:     number;
+}
+
 interface LogRow {
   ts_utc:       string;
   node_id:      string;
@@ -168,10 +182,101 @@ function NodeCard({ row, stale }: { row: TelemetryRow; stale: boolean }) {
   );
 }
 
+// ── PV Node Card ──────────────────────────────────────────────────────────────
+
+function PvNodeCard({ row }: { row: PvRow }) {
+  const [hovered, setHovered] = useState(false);
+  const ageSec = (Date.now() - parseUtcMs(row.ts_utc)) / 1000;
+  const isLive = ageSec < 10;
+  const totalLoad = (row.ld1 ?? 0) + (row.ld2 ?? 0) + (row.ld3 ?? 0) + (row.ld4 ?? 0);
+  const totalInvr = (row.invr1 ?? 0) + (row.invr2 ?? 0);
+
+  return (
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: 'block',
+        background: 'var(--surf)',
+        border: `1px solid ${hovered ? 'var(--border-hi)' : 'var(--border)'}`,
+        borderRadius: 'var(--r)',
+        padding: '20px 22px',
+        transition: 'border-color 0.15s, box-shadow 0.15s',
+        boxShadow: hovered ? '0 4px 20px rgba(0,0,0,0.18)' : 'none',
+        position: 'relative',
+        overflow: 'hidden',
+      }}
+    >
+      {/* Solar accent bar */}
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg, #facc15, #fb923c)' }} />
+
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+        <div>
+          <div style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--txt)', fontFamily: "'DM Mono', monospace", marginBottom: 2 }}>
+            {row.node_id}
+          </div>
+          <div style={{ fontSize: '0.68rem', color: 'var(--txt3)' }}>{row.pv_id}</div>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{
+              width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+              background: isLive ? '#facc15' : 'var(--txt3)',
+              boxShadow: isLive ? '0 0 6px #facc15' : 'none',
+            }} />
+            <span style={{ fontSize: '0.65rem', color: 'var(--txt3)' }}>{ageLabel(row.ts_utc)}</span>
+          </div>
+          <span style={{ fontSize: '0.62rem', fontWeight: 700, letterSpacing: '0.06em', color: '#facc15', background: 'rgba(250,204,21,0.1)', border: '1px solid rgba(250,204,21,0.25)', borderRadius: 4, padding: '1px 7px' }}>
+            SOLAR
+          </span>
+        </div>
+      </div>
+
+      {/* Inverter output bar */}
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+          <span style={{ fontSize: '0.68rem', fontWeight: 600, color: 'var(--txt3)', letterSpacing: '0.04em' }}>INVERTER OUTPUT</span>
+          <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#fb923c', fontFamily: "'DM Mono', monospace" }}>
+            {totalInvr.toFixed(2)} A
+          </span>
+        </div>
+        <div style={{ height: 5, background: 'var(--surf2)', borderRadius: 99, overflow: 'hidden' }}>
+          <div style={{ height: '100%', width: `${Math.min(100, (totalInvr / 1000) * 100)}%`, background: 'linear-gradient(90deg, #facc15, #fb923c)', borderRadius: 99, transition: 'width 0.4s ease' }} />
+        </div>
+      </div>
+
+      {/* Metrics grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px 0' }}>
+        {[
+          { label: 'Invr 1',   value: row.invr1 != null ? `${row.invr1.toFixed(2)} A`  : '—', color: 'var(--txt)' },
+          { label: 'Invr 2',   value: row.invr2 != null ? `${row.invr2.toFixed(2)} A`  : '—', color: 'var(--txt)' },
+          { label: 'Load',     value: `${totalLoad.toFixed(2)} A`,                              color: 'var(--txt)' },
+          { label: 'Batt V1',  value: row.bv1 != null   ? `${row.bv1.toFixed(2)} V`    : '—', color: 'var(--txt)' },
+          { label: 'Batt V2',  value: row.bv2 != null   ? `${row.bv2.toFixed(2)} V`    : '—', color: 'var(--txt)' },
+          { label: 'Channels', value: '4 ch',                                                   color: 'var(--txt3)' },
+        ].map(({ label, value, color }) => (
+          <div key={label}>
+            <div style={{ fontSize: '0.62rem', color: 'var(--txt3)', fontWeight: 600, letterSpacing: '0.04em', marginBottom: 2 }}>{label}</div>
+            <div style={{ fontSize: '0.82rem', fontWeight: 600, color, fontFamily: "'DM Mono', monospace" }}>{value}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end' }}>
+        <span style={{ fontSize: '0.68rem', color: 'var(--txt3)', fontWeight: 500 }}>
+          {ageLabel(row.ts_utc)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function OverviewPage() {
   const [nodes,      setNodes]      = useState<TelemetryRow[]>([]);
+  const [pvNodes,    setPvNodes]    = useState<PvRow[]>([]);
   const [logs,       setLogs]       = useState<LogRow[]>([]);
   const [me,         setMe]         = useState<Me | null>(null);
   const [lastUpdate, setLastUpdate] = useState<string>('');
@@ -198,6 +303,16 @@ export default function OverviewPage() {
     } catch { /* ignore */ }
   }
 
+  async function fetchPv() {
+    try {
+      const r = await fetch('/api/pv/latest', { cache: 'no-store' });
+      if (r.ok) {
+        const data = await r.json();
+        if (Array.isArray(data)) setPvNodes(data);
+      }
+    } catch { /* ignore */ }
+  }
+
   async function fetchCarbon() {
     try {
       const r = await fetch('/api/carbon?range=1h', { cache: 'no-store' });
@@ -215,8 +330,10 @@ export default function OverviewPage() {
       .catch(() => {});
 
     fetchLogs();
+    fetchPv();
     fetchCarbon();
-    const logInterval = setInterval(fetchLogs, 10000);
+    const logInterval    = setInterval(fetchLogs,  10000);
+    const pvInterval     = setInterval(fetchPv,    10000);
     const carbonInterval = setInterval(fetchCarbon, 30000);
 
     function connect() {
@@ -241,6 +358,7 @@ export default function OverviewPage() {
     return () => {
       esRef.current?.close();
       clearInterval(logInterval);
+      clearInterval(pvInterval);
       clearInterval(carbonInterval);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -251,8 +369,9 @@ export default function OverviewPage() {
     window.location.href = '/';
   }
 
-  const faultCount  = nodes.filter(n => n.fault_active).length;
-  const activeCount = nodes.filter(n => (Date.now() - parseUtcMs(n.ts_utc)) < 15000).length;
+  const faultCount   = nodes.filter(n => n.fault_active).length;
+  const activeCount  = nodes.filter(n => (Date.now() - parseUtcMs(n.ts_utc)) < 15000).length;
+  const pvLiveCount  = pvNodes.filter(n => (Date.now() - parseUtcMs(n.ts_utc)) < 15000).length;
 
   return (
     <div style={{ width: '100%', padding: '32px 5vw', minHeight: '100vh' }}>
@@ -273,9 +392,10 @@ export default function OverviewPage() {
       {/* Summary stats */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 32, flexWrap: 'wrap' }}>
         {[
-          { label: 'Total nodes',  value: nodes.length,  color: 'var(--txt)' },
-          { label: 'Live',         value: activeCount,   color: 'var(--ok)'  },
-          { label: 'Faults',       value: faultCount,    color: faultCount > 0 ? 'var(--err)' : 'var(--txt)' },
+          { label: 'BMS nodes',   value: nodes.length,            color: 'var(--txt)' },
+          { label: 'PV nodes',    value: pvNodes.length,          color: '#facc15'    },
+          { label: 'Live',        value: activeCount + pvLiveCount, color: 'var(--ok)'  },
+          { label: 'Faults',      value: faultCount,              color: faultCount > 0 ? 'var(--err)' : 'var(--txt)' },
         ].map(({ label, value, color }) => (
           <div key={label} style={{ flex: '1 1 140px', background: 'var(--surf)', border: '1px solid var(--border)', borderRadius: 'var(--r)', padding: '18px 20px' }}>
             <div style={{ fontSize: '0.68rem', fontWeight: 600, color: 'var(--txt3)', marginBottom: 6 }}>{label}</div>
@@ -314,6 +434,25 @@ export default function OverviewPage() {
           }}>
             {nodes.map(row => (
               <NodeCard key={row.node_id} row={row} stale={stale} />
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* PV Node cards */}
+      {pvNodes.length > 0 && (
+        <>
+          <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--txt3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 14 }}>
+            Solar / PV nodes
+          </div>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+            gap: 16,
+            marginBottom: 40,
+          }}>
+            {pvNodes.map(row => (
+              <PvNodeCard key={row.node_id} row={row} />
             ))}
           </div>
         </>
