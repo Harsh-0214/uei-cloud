@@ -201,15 +201,18 @@ function PvNodeCard({ row }: { row: PvRow }) {
   const totalInvr = invr1 + invr2;
 
   return (
-    <div
+    <a
+      href={`/pv-dashboard?node=${encodeURIComponent(row.node_id)}`}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
+        textDecoration: 'none',
         display: 'block',
         background: 'var(--surf)',
         border: `1px solid ${hovered ? 'var(--border-hi)' : 'var(--border)'}`,
         borderRadius: 'var(--r)',
         padding: '20px 22px',
+        cursor: 'pointer',
         transition: 'border-color 0.15s, box-shadow 0.15s',
         boxShadow: hovered ? '0 4px 20px rgba(0,0,0,0.18)' : 'none',
         position: 'relative',
@@ -273,11 +276,11 @@ function PvNodeCard({ row }: { row: PvRow }) {
       </div>
 
       <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end' }}>
-        <span style={{ fontSize: '0.68rem', color: 'var(--txt3)', fontWeight: 500 }}>
-          {ageLabel(row.ts_utc)}
+        <span style={{ fontSize: '0.68rem', color: hovered ? '#facc15' : 'var(--txt3)', transition: 'color 0.15s', fontWeight: 600 }}>
+          View details →
         </span>
       </div>
-    </div>
+    </a>
   );
 }
 
@@ -388,11 +391,12 @@ export default function OverviewPage() {
       <Header
         crumbs={[{ label: 'UEI Cloud', href: '/overview' }, { label: 'Overview' }]}
         nav={[
-          { label: 'Dashboard',  href: '/dashboard' },
-          { label: 'Nodes',      href: '/nodes' },
-          { label: 'Logs',       href: '/logs' },
-          { label: 'Algorithms', href: '/algorithms' },
-          { label: 'Users',      href: '/users' },
+          { label: 'Dashboard',    href: '/dashboard'    },
+          { label: 'PV Dashboard', href: '/pv-dashboard' },
+          { label: 'Nodes',        href: '/nodes'        },
+          { label: 'Logs',         href: '/logs'         },
+          { label: 'Algorithms',   href: '/algorithms'   },
+          { label: 'Users',        href: '/users'        },
         ]}
         user={me}
         onLogout={handleLogout}
