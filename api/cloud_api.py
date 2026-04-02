@@ -318,6 +318,8 @@ RANGE_MAP = {
     "1h":  "1 hour",
     "6h":  "6 hours",
     "24h": "24 hours",
+    "7d":  "7 days",
+    "30d": "30 days",
 }
 
 @app.get("/metrics")
@@ -382,28 +384,46 @@ def latest(node_id: Optional[str] = None) -> Any:
     return rows[0] if node_id else rows
 
 
+@app.get("/telemetry/nodes")
+def telemetry_nodes() -> Any:
+    """Return all distinct node_ids that have ever posted telemetry."""
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT DISTINCT node_id FROM telemetry ORDER BY node_id")
+            rows = cur.fetchall()
+    return [r[0] for r in rows]
+
+
 @app.get("/logs")
 def logs(node_id: Optional[str] = None, range: str = "1h", limit: int = 500) -> Any:
     """Return structured telemetry log rows filtered by time range. Used by the Logs page."""
-    interval = RANGE_MAP.get(range, "1 hour")
-    limit = min(limit, 2000)
-    if node_id:
-        q = """
-            SELECT * FROM telemetry
-            WHERE node_id = %s
-              AND ts_utc >= NOW() AT TIME ZONE 'UTC' - INTERVAL %s
-            ORDER BY ts_utc DESC
-            LIMIT %s;
-        """
-        params = (node_id, interval, limit)
+    limit = min(limit, 5000)
+
+    # "all" means no time filter
+    if range == "all":
+        if node_id:
+            q = "SELECT * FROM telemetry WHERE node_id = %s ORDER BY ts_utc DESC LIMIT %s"
+            params: tuple = (node_id, limit)
+        else:
+            q = "SELECT * FROM telemetry ORDER BY ts_utc DESC LIMIT %s"
+            params = (limit,)
     else:
-        q = """
-            SELECT * FROM telemetry
-            WHERE ts_utc >= NOW() AT TIME ZONE 'UTC' - INTERVAL %s
-            ORDER BY ts_utc DESC
-            LIMIT %s;
-        """
-        params = (interval, limit)
+        interval = RANGE_MAP.get(range, "1 hour")
+        if node_id:
+            q = """
+                SELECT * FROM telemetry
+                WHERE node_id = %s
+                  AND ts_utc >= NOW() AT TIME ZONE 'UTC' - INTERVAL %s
+                ORDER BY ts_utc DESC LIMIT %s
+            """
+            params = (node_id, interval, limit)
+        else:
+            q = """
+                SELECT * FROM telemetry
+                WHERE ts_utc >= NOW() AT TIME ZONE 'UTC' - INTERVAL %s
+                ORDER BY ts_utc DESC LIMIT %s
+            """
+            params = (interval, limit)
 
     with db_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:

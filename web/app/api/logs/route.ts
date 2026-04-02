@@ -7,6 +7,9 @@ const RANGE_MINUTES: Record<string, number> = {
   '1h':  60,
   '6h':  360,
   '24h': 1440,
+  '7d':  10080,
+  '30d': 43200,
+  'all': Infinity,
 };
 
 export async function GET(req: Request) {
@@ -15,8 +18,6 @@ export async function GET(req: Request) {
   const nodeId   = searchParams.get('node_id');
   const limit    = Math.min(parseInt(searchParams.get('limit') ?? '2000'), 2000);
 
-  // Try the dedicated /logs endpoint first (available after backend restart).
-  // Fall back to /telemetry with client-side time filtering.
   try {
     const logsUrl = new URL(`${API_URL}/logs`);
     if (nodeId) logsUrl.searchParams.set('node_id', nodeId);
@@ -32,21 +33,21 @@ export async function GET(req: Request) {
     // fall through to telemetry fallback
   }
 
-  // Fallback: pull up to 2000 rows from /telemetry and filter by time range here.
+  // Fallback: pull rows from /telemetry and filter by time range client-side.
   try {
     const telUrl = new URL(`${API_URL}/telemetry`);
     if (nodeId) telUrl.searchParams.set('node_id', nodeId);
-    telUrl.searchParams.set('limit', '2000');
+    telUrl.searchParams.set('limit', String(limit));
 
     const resp = await fetch(telUrl.toString(), { cache: 'no-store' });
     if (!resp.ok) return Response.json({ error: 'upstream error' }, { status: resp.status });
 
     const rows: { ts_utc: string }[] = await resp.json();
+    if (range === 'all') return Response.json(rows.slice(0, limit));
+
     const minutes  = RANGE_MINUTES[range] ?? 60;
     const cutoffMs = Date.now() - minutes * 60 * 1000;
-
     const filtered = rows.filter(r => {
-      // ts_utc comes back as "YYYY-MM-DD HH:MM:SS" (UTC, no TZ suffix)
       const ms = new Date(r.ts_utc.replace(' ', 'T') + 'Z').getTime();
       return ms >= cutoffMs;
     });
