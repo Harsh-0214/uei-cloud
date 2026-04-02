@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import ThemeToggle from '../components/ThemeToggle';
+import Header from '../components/Header';
 
 interface TelemetryRow {
   node_id:           string;
@@ -257,51 +257,18 @@ export default function OverviewPage() {
   return (
     <div style={{ width: '100%', padding: '32px 5vw', minHeight: '100vh' }}>
 
-      {/* Header */}
-      <div style={{ marginBottom: 32 }}>
-        <div style={{ height: 3, background: 'linear-gradient(90deg, var(--txt2) 0%, rgba(128,128,120,0.1) 60%, transparent 100%)', borderRadius: 99, marginBottom: 24 }} />
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-              <h1 style={{ fontSize: '1.85rem', fontWeight: 800, margin: 0, letterSpacing: '-0.03em', lineHeight: 1, background: 'var(--title-grad)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                UEI Cloud
-              </h1>
-              <span style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--txt)', background: 'var(--surf2)', border: '1px solid var(--border-hi)', padding: '3px 8px', borderRadius: 4 }}>
-                Overview
-              </span>
-            </div>
-            <p style={{ fontSize: '0.72rem', fontWeight: 500, color: 'var(--txt3)', margin: 0 }}>
-              Unified Energy Interface
-            </p>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-            {/* Nav */}
-            {[{ label: 'Nodes', href: '/nodes' }, { label: 'Logs', href: '/logs' }, { label: 'Algorithms', href: '/algorithms' }, { label: 'Users', href: '/users' }].map(({ label, href }) => (
-              <a key={href} href={href} style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--txt2)', textDecoration: 'none', transition: 'color 0.15s' }}
-                onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = 'var(--txt)'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = 'var(--txt2)'; }}>
-                {label}
-              </a>
-            ))}
-            {me && (
-              <>
-                <div style={{ width: 1, height: 20, background: 'var(--border)' }} />
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--txt)' }}>{me.email}</div>
-                  <div style={{ fontSize: '0.68rem', color: 'var(--txt3)', marginTop: 2 }}>
-                    {me.org_name} · <span style={{ color: 'var(--accent)', textTransform: 'capitalize' }}>{me.role}</span>
-                  </div>
-                </div>
-              </>
-            )}
-            <ThemeToggle />
-          </div>
-        </div>
-
-        <div style={{ height: 1, background: 'var(--border)', marginTop: 20 }} />
-      </div>
+      <Header
+        crumbs={[{ label: 'UEI Cloud', href: '/overview' }, { label: 'Overview' }]}
+        nav={[
+          { label: 'Dashboard',  href: '/dashboard' },
+          { label: 'Nodes',      href: '/nodes' },
+          { label: 'Logs',       href: '/logs' },
+          { label: 'Algorithms', href: '/algorithms' },
+          { label: 'Users',      href: '/users' },
+        ]}
+        user={me}
+        onLogout={handleLogout}
+      />
 
       {/* Summary stats */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 32, flexWrap: 'wrap' }}>

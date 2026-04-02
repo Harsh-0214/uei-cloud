@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import ThemeToggle from '../components/ThemeToggle';
+import Header from '../components/Header';
 
 interface CacOutput {
   action: string;
@@ -251,65 +251,43 @@ export default function AlgorithmsPage() {
   return (
     <div style={{ width: '100%', padding: '32px 5vw', minHeight: '100vh' }}>
 
-      {/* Header */}
-      <div style={{ marginBottom: 32 }}>
-        <div style={{ height: 3, background: 'linear-gradient(90deg, var(--txt2) 0%, rgba(128,128,120,0.1) 60%, transparent 100%)', borderRadius: 99, marginBottom: 24 }} />
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-              <a href="/overview" style={{ fontSize: '1.85rem', fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1, background: 'var(--title-grad)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', textDecoration: 'none' }}>
-                UEI Cloud
-              </a>
-              <span style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--txt)', background: 'var(--surf2)', border: '1px solid var(--border-hi)', padding: '3px 8px', borderRadius: 4 }}>
-                Algorithms
+      <Header
+        crumbs={[{ label: 'UEI Cloud', href: '/overview' }, { label: 'Algorithms' }]}
+        nav={[
+          { label: 'Overview',   href: '/overview' },
+          { label: 'Dashboard',  href: `/dashboard?node=${encodeURIComponent(nodeId)}` },
+          { label: 'Nodes',      href: '/nodes' },
+          { label: 'Logs',       href: '/logs' },
+        ]}
+        extra={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {/* Live pulse */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{
+                width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+                background: pulse ? '#4ade80' : lastTs ? '#4ade80' : 'var(--txt3)',
+                boxShadow: pulse ? '0 0 10px #4ade80' : lastTs ? '0 0 6px #4ade80' : 'none',
+                transition: 'box-shadow 0.3s',
+              }} />
+              <span style={{ fontSize: '0.65rem', color: 'var(--txt3)', whiteSpace: 'nowrap' }}>
+                {lastTs ? `updated ${ageLabel(lastTs)}` : 'waiting…'}
               </span>
-              {/* Live pulse */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginLeft: 8 }}>
-                <span style={{
-                  width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
-                  background: pulse ? '#4ade80' : lastTs ? '#4ade80' : 'var(--txt3)',
-                  boxShadow: pulse ? '0 0 10px #4ade80' : lastTs ? '0 0 6px #4ade80' : 'none',
-                  transition: 'box-shadow 0.3s',
-                }} />
-                <span style={{ fontSize: '0.65rem', color: 'var(--txt3)' }}>
-                  {lastTs ? `updated ${ageLabel(lastTs)}` : 'waiting…'}
-                </span>
-              </div>
             </div>
-            <p style={{ fontSize: '0.72rem', fontWeight: 500, color: 'var(--txt3)', margin: 0 }}>
-              Real-time CAC · RDA · RHF outputs
-            </p>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
             {/* Node selector */}
             <select
               value={nodeId}
               onChange={e => setNodeId(e.target.value)}
               style={{
-                fontFamily: 'var(--ff-mono)', fontSize: '0.82rem', fontWeight: 600,
+                fontFamily: 'var(--ff-mono)', fontSize: '0.8rem', fontWeight: 600,
                 background: 'var(--surf2)', border: '1px solid var(--border)',
-                borderRadius: 8, color: 'var(--txt)', padding: '6px 12px', cursor: 'pointer',
+                borderRadius: 8, color: 'var(--txt)', padding: '5px 10px', cursor: 'pointer',
               }}
             >
               {nodes.map(n => <option key={n} value={n}>{n}</option>)}
             </select>
-            {[
-              { label: '← Overview', href: '/overview' },
-              { label: 'Dashboard',  href: `/dashboard?node=${encodeURIComponent(nodeId)}` },
-              { label: 'Logs',       href: '/logs' },
-            ].map(({ label, href }) => (
-              <a key={href} href={href} style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--txt2)', textDecoration: 'none' }}
-                onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = 'var(--txt)'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = 'var(--txt2)'; }}>
-                {label}
-              </a>
-            ))}
-            <ThemeToggle />
           </div>
-        </div>
-        <div style={{ height: 1, background: 'var(--border)', marginTop: 20 }} />
-      </div>
+        }
+      />
 
       {nodes.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--txt3)', fontSize: '0.9rem' }}>

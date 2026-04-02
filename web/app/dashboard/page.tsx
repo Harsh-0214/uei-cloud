@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Chart, registerables } from 'chart.js';
-import ThemeToggle from '../components/ThemeToggle';
+import Header from '../components/Header';
 
 Chart.register(...registerables);
 
@@ -612,87 +612,59 @@ export default function Dashboard() {
       {/* ── Dashboard ── */}
       <div style={{ width: '100%', padding: '32px 5vw' }}>
 
-        {/* Header */}
-        <div style={{ marginBottom: 32 }}>
-          {/* Top accent bar */}
-          <div style={{ height: 3, background: 'linear-gradient(90deg, var(--accent) 0%, rgba(224,154,32,0.15) 60%, transparent 100%)', borderRadius: 99, marginBottom: 24 }} />
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
-            {/* Left: brand + node selector + org + compare */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <h1 style={{ fontSize: '1.85rem', fontWeight: 800, margin: 0, letterSpacing: '-0.03em', lineHeight: 1, background: 'var(--title-grad)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                  UEI Cloud
-                </h1>
-                <span style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#111', background: 'var(--accent)', padding: '3px 8px', borderRadius: 4 }}>
-                  Dashboard
-                </span>
-              </div>
-
+        <Header
+          crumbs={[{ label: 'UEI Cloud', href: '/overview' }, { label: 'Dashboard' }]}
+          nav={[
+            { label: 'Overview',   href: '/overview' },
+            { label: 'Nodes',      href: '/nodes' },
+            { label: 'Logs',       href: '/logs' },
+            { label: 'Algorithms', href: '/algorithms' },
+            { label: 'Users',      href: '/users' },
+          ]}
+          user={currentUser}
+          onLogout={handleLogout}
+          extra={
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              {lastUpdated && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.15)', borderRadius: 20 }}>
+                  <span className="live-dot" />
+                  <span style={{ fontSize: '0.72rem', color: '#4ade80', fontWeight: 600 }}>{lastUpdated}</span>
+                </div>
+              )}
               {initialized && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  {/* Primary node selector */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    {compareMode && <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#e09a20', flexShrink: 0, display: 'inline-block' }} />}
-                    <label style={{ fontSize: '0.75rem', color: 'var(--txt2)', fontWeight: 500 }}>Node</label>
-                    <select
-                      value={selectedId}
-                      onChange={e => handleNodeChange(e.target.value)}
-                      style={{
-                        background: 'var(--surf)', border: '1px solid var(--border)',
-                        borderRadius: 6, color: 'var(--txt)',
-                        fontFamily: 'var(--ff-sans)', fontSize: '0.8rem', fontWeight: 500,
-                        padding: '5px 10px', outline: 'none', cursor: 'pointer',
-                      }}
-                    >
-                      {nodes.map(n => <option key={n.node_id} value={n.node_id}>{n.node_id}</option>)}
-                    </select>
-                    {/* Org badge */}
-                    {nodeOrgMap[selectedId] && (
-                      <span style={{
-                        fontSize: '0.68rem', fontWeight: 600, letterSpacing: '0.04em',
-                        color: 'var(--accent)', background: 'rgba(224,154,32,0.1)',
-                        border: '1px solid rgba(224,154,32,0.25)',
-                        borderRadius: 4, padding: '2px 8px', whiteSpace: 'nowrap',
-                      }}>
-                        {nodeOrgMap[selectedId]}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Compare node selector */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  {compareMode && <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#e09a20', flexShrink: 0, display: 'inline-block' }} />}
+                  <select
+                    value={selectedId}
+                    onChange={e => handleNodeChange(e.target.value)}
+                    style={{ background: 'var(--surf)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--txt)', fontFamily: 'var(--ff-sans)', fontSize: '0.8rem', fontWeight: 500, padding: '5px 10px', outline: 'none', cursor: 'pointer' }}
+                  >
+                    {nodes.map(n => <option key={n.node_id} value={n.node_id}>{n.node_id}</option>)}
+                  </select>
+                  {nodeOrgMap[selectedId] && (
+                    <span style={{ fontSize: '0.68rem', fontWeight: 600, letterSpacing: '0.04em', color: 'var(--accent)', background: 'rgba(224,154,32,0.1)', border: '1px solid rgba(224,154,32,0.25)', borderRadius: 4, padding: '2px 8px', whiteSpace: 'nowrap' }}>
+                      {nodeOrgMap[selectedId]}
+                    </span>
+                  )}
                   {compareMode && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <>
                       <span style={{ fontSize: '0.72rem', color: 'var(--txt3)', fontWeight: 500 }}>vs</span>
                       <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#38bdf8', flexShrink: 0, display: 'inline-block' }} />
                       <select
                         value={compareId}
                         onChange={e => handleCompareChange(e.target.value)}
-                        style={{
-                          background: 'var(--surf)', border: '1px solid rgba(56,189,248,0.4)',
-                          borderRadius: 6, color: '#38bdf8',
-                          fontFamily: 'var(--ff-sans)', fontSize: '0.8rem', fontWeight: 500,
-                          padding: '5px 10px', outline: 'none', cursor: 'pointer',
-                        }}
+                        style={{ background: 'var(--surf)', border: '1px solid rgba(56,189,248,0.4)', borderRadius: 6, color: '#38bdf8', fontFamily: 'var(--ff-sans)', fontSize: '0.8rem', fontWeight: 500, padding: '5px 10px', outline: 'none', cursor: 'pointer' }}
                       >
                         {nodes.filter(n => n.node_id !== selectedId).map(n => (
                           <option key={n.node_id} value={n.node_id}>{n.node_id}</option>
                         ))}
                       </select>
-                    </div>
+                    </>
                   )}
-
-                  {/* Compare toggle */}
                   {nodes.length > 1 && (
                     <button
                       onClick={toggleCompare}
-                      style={{
-                        fontFamily: 'var(--ff-sans)', fontSize: '0.75rem', fontWeight: 600,
-                        padding: '5px 12px', borderRadius: 6, cursor: 'pointer', transition: 'all 0.15s',
-                        background: compareMode ? 'rgba(56,189,248,0.12)' : 'transparent',
-                        border: compareMode ? '1px solid rgba(56,189,248,0.4)' : '1px solid var(--border)',
-                        color: compareMode ? '#38bdf8' : 'var(--txt2)',
-                      }}
+                      style={{ fontFamily: 'var(--ff-sans)', fontSize: '0.75rem', fontWeight: 600, padding: '5px 12px', borderRadius: 6, cursor: 'pointer', transition: 'all 0.15s', background: compareMode ? 'rgba(56,189,248,0.12)' : 'transparent', border: compareMode ? '1px solid rgba(56,189,248,0.4)' : '1px solid var(--border)', color: compareMode ? '#38bdf8' : 'var(--txt2)' }}
                     >
                       {compareMode ? '× Compare' : '⇄ Compare'}
                     </button>
@@ -700,70 +672,8 @@ export default function Dashboard() {
                 </div>
               )}
             </div>
-
-            {/* Right: user info + live status + nav */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>
-              {currentUser && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--txt)' }}>
-                      {currentUser.email}
-                    </div>
-                    <div style={{ fontSize: '0.68rem', color: 'var(--txt3)', marginTop: 2 }}>
-                      {currentUser.org_name} · <span style={{ color: 'var(--accent)', textTransform: 'capitalize' }}>{currentUser.role}</span>
-                    </div>
-                  </div>
-                  <a
-                    href="/users"
-                    title="View all users"
-                    style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      width: 32, height: 32, borderRadius: '50%',
-                      background: 'linear-gradient(135deg, var(--surf2), var(--surf))',
-                      border: '1px solid var(--border-hi)',
-                      color: 'var(--txt)', textDecoration: 'none', fontSize: '0.78rem',
-                      fontWeight: 700, flexShrink: 0,
-                    }}
-                  >
-                    {currentUser.email[0].toUpperCase()}
-                  </a>
-                  <ThemeToggle />
-                </div>
-              )}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                {lastUpdated && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.15)', borderRadius: 20 }}>
-                    <span className="live-dot" />
-                    <span style={{ fontSize: '0.72rem', color: '#4ade80', fontWeight: 600 }}>
-                      {lastUpdated}
-                    </span>
-                  </div>
-                )}
-                <a href="/overview" style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--txt2)', textDecoration: 'none', padding: '4px 12px', border: '1px solid var(--border)', borderRadius: 20, transition: 'all 0.15s' }}
-                  onMouseEnter={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.color='var(--txt)'; a.style.borderColor='var(--border-hi)'; }}
-                  onMouseLeave={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.color='var(--txt2)'; a.style.borderColor='var(--border)'; }}>
-                  ← Overview
-                </a>
-                <a href="/logs" style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--txt2)', textDecoration: 'none', padding: '4px 12px', border: '1px solid var(--border)', borderRadius: 20, transition: 'all 0.15s' }}
-                  onMouseEnter={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.color='var(--txt)'; a.style.borderColor='var(--border-hi)'; }}
-                  onMouseLeave={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.color='var(--txt2)'; a.style.borderColor='var(--border)'; }}>
-                  Logs
-                </a>
-                <a href="/nodes" style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--txt2)', textDecoration: 'none', padding: '4px 12px', border: '1px solid var(--border)', borderRadius: 20, transition: 'all 0.15s' }}
-                  onMouseEnter={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.color='var(--txt)'; a.style.borderColor='var(--border-hi)'; }}
-                  onMouseLeave={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.color='var(--txt2)'; a.style.borderColor='var(--border)'; }}>
-                  Nodes
-                </a>
-                <a href="/algorithms" style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--txt2)', textDecoration: 'none', padding: '4px 12px', border: '1px solid var(--border)', borderRadius: 20, transition: 'all 0.15s' }}
-                  onMouseEnter={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.color='var(--txt)'; a.style.borderColor='var(--border-hi)'; }}
-                  onMouseLeave={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.color='var(--txt2)'; a.style.borderColor='var(--border)'; }}>
-                  Algorithms
-                </a>
-              </div>
-            </div>
-          </div>
-          <div style={{ height: 1, background: 'var(--border)', marginTop: 24 }} />
-        </div>
+          }
+        />
 
         {/* Loading */}
         {!initialized && (
