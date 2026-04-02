@@ -1,32 +1,30 @@
 # UEI Cloud Platform
 
-**Unified Energy Interface** — a cloud-hosted Battery Management System (BMS) monitoring platform built as a fourth-year capstone project.
+**Unified Energy Interface** — a cloud-hosted Battery Management System (BMS) and PV monitoring platform built as a fourth-year capstone project.
 
-Ingests telemetry from BMS hardware (Orion Jr2), stores it in PostgreSQL, serves it through a multi-tenant REST API, visualizes it in Grafana, and exposes an AI-powered natural language assistant powered by Claude.
+Ingests telemetry from BMS hardware (Orion Jr2) and PV/solar systems, stores it in PostgreSQL, serves it through a multi-tenant REST API, and visualizes it in a Next.js dashboard with live SSE streaming, edge algorithm outputs, carbon emissions tracking, and an AI-powered natural language assistant.
+
+Live: **https://uei-cloud.vercel.app**
 
 ---
 
 ## Architecture
 
 ```
-BMS Hardware / Raspberry Pi / Simulator
-          │
-          │  POST /telemetry  (no auth — device-friendly)
-          ▼
-  FastAPI Cloud API  (:8000)
-          │
-          ├─── PostgreSQL  (telemetry + auth tables)
-          │         │
-          │         └─── Grafana  (:3000)  real-time dashboards
-          │
-          └─── Next.js Frontend  (Vercel)
-                    │
-                    ├─── /             Landing page
-                    ├─── /login        Login / Register
-                    └─── /dashboard    Live telemetry + AI chat
-                              │
-                              └─── Claude AI Chatbot  (:8001)
-                                        (natural language → SQL)
+BMS Raspberry Pi (Orion Jr2)          PV Raspberry Pi (CSV reader)
+  POST /telemetry (no auth)             pv_live_line_to_postgres_every3s.py
+         │                                        │ (direct DB write)
+         ▼                                        ▼
+  FastAPI Cloud API (:8000)  ──────  PostgreSQL (Docker)
+         │
+         └── Next.js Frontend (Vercel)
+                  ├── /              Landing page
+                  ├── /login         Login / Register
+                  ├── /overview      Live node cards + recent logs
+                  ├── /dashboard     Full telemetry + algorithms + carbon
+                  ├── /nodes         Add / remove nodes
+                  ├── /logs          Full log history + JSON export
+                  └── /users         User management
 ```
 
 ### Stack
@@ -34,13 +32,13 @@ BMS Hardware / Raspberry Pi / Simulator
 | Layer | Technology |
 |---|---|
 | Cloud API | FastAPI 0.115, Python 3.11, Uvicorn |
-| Database | PostgreSQL 16 |
-| Visualization | Grafana (latest) |
-| Frontend | Next.js 15 (App Router), TypeScript, Tailwind CSS |
+| Database | PostgreSQL 16 (Docker) |
+| Frontend | Next.js 15 (App Router), TypeScript |
 | Hosting | Vercel (frontend) · Docker Compose on GCP VM (backend) |
 | AI Assistant | Claude (`claude-sonnet-4-6`) via Anthropic SDK |
-| Auth | JWT (HS256, 8h expiry) · bcrypt password hashing |
-| Containers | Docker + docker-compose |
+| Auth | JWT (HS256, 8 h expiry) · bcrypt password hashing |
+| Algorithms | CAC, RDA, RHF (edge + cloud) |
+| Carbon | CarbonCalculator — CO₂ emitted/avoided per interval |
 
 ---
 
@@ -49,38 +47,36 @@ BMS Hardware / Raspberry Pi / Simulator
 ```
 uei-cloud/
 ├── api/
-│   ├── cloud_api.py          # FastAPI application (auth + telemetry + data routes)
+│   ├── cloud_api.py          # FastAPI application — auth, telemetry, algorithms, carbon, PV
 │   ├── seed.py               # Creates superadmin account (org: Capstone)
+│   ├── algorithms/
+│   │   ├── cac.py            # Context-Aware Adaptive Control
+│   │   ├── rda.py            # Risk-Indexed Derating Algorithm
+│   │   ├── rhf.py            # Rolling Health Forecast
+│   │   └── carbon.py         # Carbon Emissions Calculator
 │   ├── Dockerfile
 │   └── requirements.txt
 │
 ├── db/
-│   ├── init.sql              # Full schema — runs automatically on first docker-compose up
-│   └── migrate_auth.sql      # Safe migration for existing DBs (adds auth tables)
-│
-├── django_app/               # Secondary admin dashboard (port 8080)
-│   ├── dashboard/
-│   └── uei/
+│   ├── init.sql              # Base schema (runs on first docker-compose up)
+│   ├── migrate_auth.sql      # Adds auth tables to existing DB
+│   ├── migrate_algo.sql      # Adds algo_events, soh_forecast, node_config tables
+│   ├── migrate_carbon.sql    # Adds carbon_config, carbon_events tables
+│   └── migrate_pv.sql        # Adds pv_telemetry table
 │
 ├── web/                      # Next.js frontend (deployed to Vercel)
-│   ├── app/
-│   │   ├── page.tsx          # Landing page  →  uei-cloud.vercel.app/
-│   │   ├── login/page.tsx    # Login + Register
-│   │   ├── dashboard/        # Live dashboard (auth-gated)
-│   │   └── api/              # Next.js API routes (proxy to FastAPI)
-│   └── vercel.json
+│   └── app/
+│       ├── overview/         # Post-login landing — live node cards + logs
+│       ├── dashboard/        # Full dashboard — telemetry, charts, algorithms, carbon
+│       ├── nodes/            # Add/remove registered nodes
+│       ├── logs/             # Log history, range filter, JSON export
+│       ├── users/            # User management
+│       └── api/              # Next.js proxy routes → FastAPI
 │
-├── chatbot/
-│   ├── main.py               # Claude-powered chatbot API (:8001)
-│   ├── static/index.html     # Web UI
-│   └── requirements.txt
-│
-├── simulator.py              # Orion Jr2 BMS simulator (configurable rate/node)
-├── bms_api_simulator.py      # Realistic stateful BMS sim (drift + faults)
-├── BMS_CC.py                 # Static single-packet BMS sender
-├── sim_pv_api.py             # PV system simulator (inverters + loads)
-├── test_pv_csv_to_postgres.py# Bulk-load pv_data.csv into PostgreSQL
-├── pv_data.csv               # Sample PV telemetry (10 rows)
+├── pi_bms_client.py          # Pi client for real BMS (Orion Jr2 via CAN/serial)
+├── pi_pv_client.py           # Pi client for PV system (CSV reader, no Modbus)
+├── pi_setup.sh               # One-shot Pi setup script (systemd service)
+├── run_all.py                # All-in-one simulator (3 BMS + 3 PV nodes + carbon)
 ├── docker-compose.yml
 ├── .env.example
 └── README.md
@@ -94,7 +90,7 @@ uei-cloud/
 
 - Google Cloud Compute Engine VM (Debian / Ubuntu)
 - Docker + Docker Compose v2
-- Firewall rules open: `8000` (API), `3000` (Grafana), `8080` (Django)
+- Firewall rules open: `8000` (API), `3000` (Grafana)
 - A `.env` file — copy from `.env.example` and fill in secrets
 
 ### First-time setup
@@ -104,9 +100,20 @@ git clone git@github.com:Harsh-0214/uei-cloud.git
 cd uei-cloud
 cp .env.example .env          # edit SECRET_KEY and passwords
 docker compose up -d --build
+
+# Create superadmin account
+docker exec uei-cloud-api-1 python seed.py
 ```
 
-`db/init.sql` runs automatically and creates all tables on first startup.
+### Run all migrations (required on existing deployments)
+
+```bash
+docker exec -i uei-postgres psql -U uei -d uei < db/migrate_auth.sql
+docker exec -i uei-postgres psql -U uei -d uei < db/migrate_algo.sql
+docker exec -i uei-postgres psql -U uei -d uei < db/migrate_carbon.sql
+docker exec -i uei-postgres psql -U uei -d uei < db/migrate_pv.sql
+docker compose restart api
+```
 
 ### Updating an existing deployment
 
@@ -116,27 +123,9 @@ docker compose build api
 docker compose up -d api
 ```
 
-### Create the superadmin account
-
-After the API container is running:
-
-```bash
-docker exec uei-cloud-api-1 python seed.py
-```
-
-This creates org **Capstone** and user `capstone.uei@gmail.com` / `capstone` with role `superadmin`. Safe to re-run.
-
-### Migrate an existing database (auth tables only)
-
-```bash
-docker exec -i uei-postgres psql -U uei -d uei < db/migrate_auth.sql
-```
-
 ---
 
 ## Environment Variables
-
-Copy `.env.example` to `.env` and set:
 
 | Variable | Description |
 |---|---|
@@ -144,219 +133,144 @@ Copy `.env.example` to `.env` and set:
 | `POSTGRES_USER` | DB user (default: `uei`) |
 | `POSTGRES_PASSWORD` | DB password |
 | `SECRET_KEY` | JWT signing secret — **change in production** |
-| `GF_SECURITY_ADMIN_PASSWORD` | Grafana admin password |
-| `ANTHROPIC_API_KEY` | Claude API key for the chatbot |
+| `ANTHROPIC_API_KEY` | Claude API key (AI chatbot + carbon config) |
+
+**Vercel** — set `API_URL` to `http://<VM_IP>:8000` in project settings.
 
 ---
 
 ## Database Schema
 
 ### `telemetry` — BMS data points
+Written by `POST /telemetry` (Pi clients / simulators).
 
 | Column | Type | Description |
 |---|---|---|
-| `id` | BIGSERIAL | Primary key |
-| `ts_utc` | TIMESTAMPTZ | Measurement timestamp |
 | `node_id` | TEXT | Raspberry Pi / device ID |
 | `bms_id` | TEXT | BMS unit identifier |
 | `soc` | FLOAT | State of charge (0–100 %) |
 | `pack_voltage` | FLOAT | Pack voltage (V) |
 | `pack_current` | FLOAT | Pack current (A, + = charging) |
-| `temp_high` | FLOAT | Highest cell temp (°C) |
-| `temp_low` | FLOAT | Lowest cell temp (°C) |
-| `ccl` | FLOAT | Charge current limit (A) |
-| `dcl` | FLOAT | Discharge current limit (A) |
+| `temp_high / low` | FLOAT | Cell temperatures (°C) |
+| `ccl / dcl` | FLOAT | Charge / discharge current limits (A) |
 | `fault_active` | BOOL | Active fault flag |
-| `faults_cleared_min` | FLOAT | Minutes since last fault clear |
-| `highest_cell_v` | FLOAT | Max cell voltage (V) |
-| `lowest_cell_v` | FLOAT | Min cell voltage (V) |
+| `highest_cell_v / lowest_cell_v` | FLOAT | Min/max cell voltages (V) |
+
+### `pv_telemetry` — Solar / PV data points
+Written directly to PostgreSQL by `pv_live_line_to_postgres_every3s.py` on the PV Pi.
+
+| Column | Type | Description |
+|---|---|---|
+| `node_id` | TEXT | PV system node ID |
+| `pv_id` | TEXT | PV unit identifier |
+| `invr1 / invr2` | FLOAT | Inverter currents (A) |
+| `ld1–ld4` | FLOAT | Load channel currents (A) |
+| `bv1 / bv2` | FLOAT | Battery voltages (V) |
+
+### `algo_events` — Edge algorithm outputs (CAC / RDA)
+Written by Pi clients after each telemetry packet. `output` is JSONB.
+
+### `soh_forecast` — RHF battery health forecasts
+Written by `rhf_job.py`. Contains `current_soh`, `forecast_30d/60d/90d`.
+
+### `carbon_events` — Carbon emissions per interval
+Written by Pi clients / `run_all.py` via `POST /carbon`.
 
 ### `organizations`, `users`, `nodes` — Multi-tenant auth
-
 ```
 organizations  ──< users     (each user belongs to one org)
 organizations  ──< nodes     (each node is registered to one org)
-nodes          ──  telemetry (joined by node_id for data isolation)
 ```
-
 User roles: `member` · `admin` · `superadmin`
 
 ---
 
 ## API Reference
 
-Base URL (production): `http://34.130.163.154:8000`
+Base URL: `http://34.130.163.154:8000`  |  Docs: `/docs`
 
 ### Auth
-
-| Method | Endpoint | Auth | Description |
-|---|---|---|---|
-| `POST` | `/auth/register` | None | Create account; first user in a new org becomes admin |
-| `POST` | `/auth/login` | None | Returns a JWT access token |
-| `GET` | `/auth/me` | Bearer JWT | Returns current user profile |
-
-**Register / Login body:**
-```json
-{ "email": "you@example.com", "password": "secret", "org_name": "Team A" }
-```
-
-**Token response:**
-```json
-{ "access_token": "...", "token_type": "bearer", "org_name": "Team A", "role": "admin" }
-```
-
-### Admin
-
-| Method | Endpoint | Auth | Description |
-|---|---|---|---|
-| `POST` | `/admin/nodes` | Admin JWT | Register a node to an organization |
-
-```json
-{ "node_id": "pi_bms_1", "org_name": "Team A" }
-```
-
-Only nodes registered here will appear in `/latest` and `/telemetry`.
-
-### Telemetry Ingestion
-
-| Method | Endpoint | Auth | Description |
-|---|---|---|---|
-| `POST` | `/telemetry` | None | Ingest a BMS packet (devices post here) |
-
-```json
-{
-  "ts_utc": "2026-03-10T18:00:00Z",
-  "node_id": "pi_bms_1",
-  "bms_id": "orionjr2_1",
-  "soc": 82.1,
-  "pack_voltage": 48.6,
-  "pack_current": -3.2,
-  "temp_high": 31.5,
-  "temp_low": 28.0,
-  "ccl": 50.0,
-  "dcl": 100.0,
-  "fault_active": false,
-  "faults_cleared_min": 120.0,
-  "highest_cell_v": 3.34,
-  "lowest_cell_v": 3.30
-}
-```
-
-### Data (Protected)
-
-All routes require `Authorization: Bearer <token>`.
-
-Regular users see only nodes belonging to their organization. `superadmin` sees all nodes across all organizations.
-
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/latest` | Latest reading for each node in your org |
-| `GET` | `/latest?node_id=pi_bms_1` | Latest reading for a specific node |
-| `GET` | `/telemetry?limit=100` | Recent telemetry rows (max 1000) |
-| `GET` | `/telemetry?node_id=pi_bms_1` | Filtered by node |
-| `GET` | `/schema` | DB schema (used by AI chatbot) |
-| `POST` | `/query` | Execute a read-only SELECT query |
+| `POST` | `/auth/register` | Create account |
+| `POST` | `/auth/login` | Returns JWT access token |
+| `GET` | `/auth/me` | Current user profile |
+
+### Telemetry
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| `POST` | `/telemetry` | None | Ingest BMS packet |
+| `POST` | `/pv/telemetry` | None | Ingest PV packet |
+| `GET` | `/stream/latest` | None | SSE — live telemetry for all nodes (1 s) |
+| `GET` | `/latest` | JWT | Latest BMS reading per node |
+| `GET` | `/pv/latest` | JWT | Latest PV reading per node |
+| `GET` | `/logs` | JWT | BMS log history (supports `range`, `node_id`, `limit`) |
+| `GET` | `/pv/telemetry` | JWT | PV history |
+| `GET` | `/telemetry/nodes` | None | All distinct node_ids ever seen |
+
+### Algorithms
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| `POST` | `/algo` | None | Ingest CAC/RDA output from Pi |
+| `GET` | `/algo/latest` | JWT | Latest algo output per node/algo |
+| `GET` | `/forecast` | JWT | Latest RHF SoH forecast |
+| `POST` | `/algo/rhf/run` | Admin JWT | Trigger RHF job |
+
+### Carbon
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| `POST` | `/carbon` | None | Ingest carbon event from Pi |
+| `GET` | `/carbon/summary` | JWT | Aggregated emissions stats |
+| `GET` | `/carbon/config/{node_id}` | None | Node carbon intensity config |
+| `PATCH` | `/carbon/config/{node_id}` | Admin JWT | Update carbon intensity |
+
+### Admin
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| `GET` | `/admin/nodes` | Admin JWT | List all registered nodes |
+| `POST` | `/admin/nodes` | Admin JWT | Register a node to an org |
+| `DELETE` | `/admin/nodes/{node_id}` | Admin JWT | Remove a node |
+| `GET` | `/admin/users` | Admin JWT | List users in org |
 
 ---
 
-## Frontend (Next.js on Vercel)
-
-URL: `https://uei-cloud.vercel.app`
+## Frontend Pages
 
 | Route | Description |
 |---|---|
 | `/` | Public landing page |
-| `/login` | Login / Register (JWT stored in localStorage) |
-| `/dashboard` | Live telemetry, Chart.js graphs, AI chat — requires login |
-
-To deploy: push to `main`. Vercel auto-deploys from `web/`.
-
-Set `API_URL` in Vercel environment variables to point at the FastAPI server.
-
----
-
-## Grafana
-
-Access: `http://<VM_IP>:3000`
-
-**Add PostgreSQL data source:**
-- Host: `postgres:5432`
-- Database: `uei`
-- User: `uei`
-- Password: from `.env`
-- SSL: disabled
-
-**Example dashboard query (SOC over time):**
-```sql
-SELECT ts_utc AS "time", soc
-FROM telemetry
-WHERE node_id = 'pi_bms_1'
-ORDER BY ts_utc;
-```
+| `/login` | Login / Register |
+| `/overview` | Live node cards, summary stats, recent logs — main post-login page |
+| `/dashboard` | Full dashboard: live metrics, Chart.js history, CAC/RDA/RHF outputs, carbon emissions |
+| `/nodes` | Register / remove nodes; view by org |
+| `/logs` | Full log history with range filter, node filter, PDF + JSON export |
+| `/users` | User management |
 
 ---
 
-## Simulators
+## Raspberry Pi Setup
 
-### `simulator.py` — Orion Jr2 BMS (recommended)
+Four Pis are deployed in the lab:
 
-Stateful 4S LiFePO₄ model with coulomb counting, cell imbalance, and temperature-triggered fault/derate logic.
+| Pi | Role | Script |
+|---|---|---|
+| `pi_bms_real` | Real BMS (Orion Jr2) | `pi_setup.sh --type bms --mode real` |
+| `pi_pv_real` | Real PV system (CSV reader) | `pi_setup.sh --type pv --mode real --csv-path /path/to/pv.csv` |
+| `pi_bms_sim` | BMS simulator | `pi_setup.sh --type bms --mode sim` |
+| `pi_pv_sim` | PV simulator | `pi_setup.sh --type pv --mode sim` |
+
+`pi_setup.sh` installs dependencies and creates a `systemd` service that auto-restarts on reboot.
+
+---
+
+## Simulator
+
+`run_all.py` runs 3 BMS + 3 PV simulator threads, posting telemetry, algorithm outputs (CAC/RDA), and carbon events every 2 s.
 
 ```bash
 pip install requests
-python simulator.py --hz 1 --post-url http://34.130.163.154:8000/telemetry
-# Options: --node-id, --bms-id, --soc-start
+python run_all.py --api-url http://34.130.163.154:8000
 ```
-
-### `bms_api_simulator.py` — Realistic drift + random faults
-
-Sends every 2 s. ~1 % fault injection per cycle, 15 % per-cycle recovery chance.
-
-```bash
-python bms_api_simulator.py
-```
-
-### `BMS_CC.py` — Static single-packet sender
-
-Posts one fixed telemetry packet on loop (5 s interval). Useful for smoke-testing the ingestion endpoint.
-
-```bash
-python BMS_CC.py
-```
-
-### `sim_pv_api.py` — PV system simulator
-
-Simulates 2 inverters, 4 load channels, and 2 battery voltages. Posts to `/pv/telemetry`.
-
-```bash
-python sim_pv_api.py
-```
-
-### `test_pv_csv_to_postgres.py` — CSV bulk loader
-
-Loads `pv_data.csv` into PostgreSQL `pv_telemetry` table directly.
-
-```bash
-python test_pv_csv_to_postgres.py
-```
-
----
-
-## AI Chatbot
-
-The chatbot service (`chatbot/`) runs separately on port `8001`. It uses Claude with tool-use to translate natural language questions into SQL queries, executing them read-only against the database.
-
-```bash
-cd chatbot
-pip install -r requirements.txt
-cp .env.example .env        # set DATABASE_URL and ANTHROPIC_API_KEY
-python main.py
-```
-
-Example questions the assistant can answer:
-- "What is the current SOC for node pi_bms_1?"
-- "Show me any faults in the last 24 hours"
-- "Which node has the lowest pack voltage right now?"
 
 ---
 
@@ -366,13 +280,16 @@ Example questions the assistant can answer:
 # View logs
 docker compose logs -f api
 docker compose logs -f postgres
-docker compose logs -f grafana
 
-# Restart a single service
+# Restart API
 docker compose restart api
 
-# Stop everything
-docker compose down
+# Inspect database
+docker exec -it uei-postgres psql -U uei -d uei
+\dt                          # list tables
+SELECT COUNT(*) FROM telemetry;
+SELECT COUNT(*) FROM carbon_events;
+SELECT DISTINCT node_id FROM telemetry;
 
 # Full rebuild
 docker compose up -d --build
@@ -386,10 +303,14 @@ docker compose up -d --build
 |---|---|
 | Cloud API (FastAPI) | Complete |
 | Multi-tenant auth (JWT, orgs, roles) | Complete |
-| Telemetry ingestion | Complete |
+| BMS telemetry ingestion + live SSE | Complete |
+| PV telemetry (direct DB write) | Complete |
 | Next.js frontend (Vercel) | Complete |
-| Grafana dashboards | Complete |
-| AI chatbot (Claude) | Complete |
-| BMS simulators | Complete |
-| PV system support | In progress |
+| Overview page (live node cards) | Complete |
+| Nodes management page | Complete |
+| Logs page (range/node filter, export) | Complete |
+| Edge algorithms (CAC, RDA, RHF) | Complete |
+| Carbon Emissions Calculator | Complete |
+| AI chatbot (Claude, natural language → SQL) | Complete |
+| BMS + PV simulators (`run_all.py`) | Complete |
 | Hardware (BMS / Pi) integration | Ongoing |

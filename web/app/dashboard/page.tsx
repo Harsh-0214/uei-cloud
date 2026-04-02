@@ -1004,6 +1004,39 @@ export default function Dashboard() {
               );
             })()}
 
+            {/* History */}
+            <SectionLabel>Historical Data</SectionLabel>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 16 }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--txt2)', fontWeight: 500, marginRight: 4 }}>Range</span>
+              {(['5m', '15m', '30m', '1h', '6h', '24h'] as const).map(r => (
+                <button key={r} onClick={() => handleRangeChange(r)} style={{
+                  fontFamily: 'var(--ff-sans)', fontSize: '0.78rem', fontWeight: 500,
+                  padding: '5px 14px', borderRadius: 99,
+                  background: timeRange === r ? 'var(--accent)' : 'transparent',
+                  color:      timeRange === r ? '#111' : 'var(--txt2)',
+                  border:    `1px solid ${timeRange === r ? 'var(--accent)' : 'var(--border)'}`,
+                  cursor: 'pointer', transition: 'all 0.15s',
+                }}>{r}</button>
+              ))}
+            </div>
+
+            {/* Charts */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {[
+                { title: 'State of Charge', canvasRef: socRef },
+                { title: 'Pack Voltage',    canvasRef: voltRef },
+                { title: 'Temperature',     canvasRef: tempRef },
+              ].map(({ title, canvasRef }) => (
+                <div key={title} style={{
+                  background: 'var(--surf)', border: '1px solid var(--border)',
+                  borderRadius: 'var(--r)', padding: '18px 20px',
+                }}>
+                  <p style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--txt2)', margin: '0 0 14px' }}>{title}</p>
+                  <div className="chart-container"><canvas ref={canvasRef} /></div>
+                </div>
+              ))}
+            </div>
+
             {/* ── Carbon Emissions ── */}
             {carbonSummary && (() => {
               // Normalise field names — API may return total_co2_g or co2_g depending on version
@@ -1087,39 +1120,6 @@ export default function Dashboard() {
                 </>
               );
             })()}
-
-            {/* History */}
-            <SectionLabel>Historical Data</SectionLabel>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 16 }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--txt2)', fontWeight: 500, marginRight: 4 }}>Range</span>
-              {(['5m', '15m', '30m', '1h', '6h', '24h'] as const).map(r => (
-                <button key={r} onClick={() => handleRangeChange(r)} style={{
-                  fontFamily: 'var(--ff-sans)', fontSize: '0.78rem', fontWeight: 500,
-                  padding: '5px 14px', borderRadius: 99,
-                  background: timeRange === r ? 'var(--accent)' : 'transparent',
-                  color:      timeRange === r ? '#111' : 'var(--txt2)',
-                  border:    `1px solid ${timeRange === r ? 'var(--accent)' : 'var(--border)'}`,
-                  cursor: 'pointer', transition: 'all 0.15s',
-                }}>{r}</button>
-              ))}
-            </div>
-
-            {/* Charts */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {[
-                { title: 'State of Charge', canvasRef: socRef },
-                { title: 'Pack Voltage',    canvasRef: voltRef },
-                { title: 'Temperature',     canvasRef: tempRef },
-              ].map(({ title, canvasRef }) => (
-                <div key={title} style={{
-                  background: 'var(--surf)', border: '1px solid var(--border)',
-                  borderRadius: 'var(--r)', padding: '18px 20px',
-                }}>
-                  <p style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--txt2)', margin: '0 0 14px' }}>{title}</p>
-                  <div className="chart-container"><canvas ref={canvasRef} /></div>
-                </div>
-              ))}
-            </div>
 
             {/* Footer */}
             <div style={{ marginTop: 40, paddingTop: 20, borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
