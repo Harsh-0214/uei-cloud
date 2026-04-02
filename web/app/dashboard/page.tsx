@@ -618,9 +618,9 @@ export default function Dashboard() {
           <div style={{ height: 3, background: 'linear-gradient(90deg, var(--accent) 0%, rgba(224,154,32,0.15) 60%, transparent 100%)', borderRadius: 99, marginBottom: 24 }} />
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
-            {/* Brand + page badge */}
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+            {/* Left: brand + node selector + org + compare */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <h1 style={{ fontSize: '1.85rem', fontWeight: 800, margin: 0, letterSpacing: '-0.03em', lineHeight: 1, background: 'var(--title-grad)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
                   UEI Cloud
                 </h1>
@@ -628,13 +628,81 @@ export default function Dashboard() {
                   Dashboard
                 </span>
               </div>
-              <p style={{ fontSize: '0.72rem', fontWeight: 500, color: 'var(--txt3)', margin: 0 }}>
-                Unified Energy Interface
-              </p>
+
+              {initialized && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  {/* Primary node selector */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {compareMode && <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#e09a20', flexShrink: 0, display: 'inline-block' }} />}
+                    <label style={{ fontSize: '0.75rem', color: 'var(--txt2)', fontWeight: 500 }}>Node</label>
+                    <select
+                      value={selectedId}
+                      onChange={e => handleNodeChange(e.target.value)}
+                      style={{
+                        background: 'var(--surf)', border: '1px solid var(--border)',
+                        borderRadius: 6, color: 'var(--txt)',
+                        fontFamily: 'var(--ff-sans)', fontSize: '0.8rem', fontWeight: 500,
+                        padding: '5px 10px', outline: 'none', cursor: 'pointer',
+                      }}
+                    >
+                      {nodes.map(n => <option key={n.node_id} value={n.node_id}>{n.node_id}</option>)}
+                    </select>
+                    {/* Org badge */}
+                    {nodeOrgMap[selectedId] && (
+                      <span style={{
+                        fontSize: '0.68rem', fontWeight: 600, letterSpacing: '0.04em',
+                        color: 'var(--accent)', background: 'rgba(224,154,32,0.1)',
+                        border: '1px solid rgba(224,154,32,0.25)',
+                        borderRadius: 4, padding: '2px 8px', whiteSpace: 'nowrap',
+                      }}>
+                        {nodeOrgMap[selectedId]}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Compare node selector */}
+                  {compareMode && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--txt3)', fontWeight: 500 }}>vs</span>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#38bdf8', flexShrink: 0, display: 'inline-block' }} />
+                      <select
+                        value={compareId}
+                        onChange={e => handleCompareChange(e.target.value)}
+                        style={{
+                          background: 'var(--surf)', border: '1px solid rgba(56,189,248,0.4)',
+                          borderRadius: 6, color: '#38bdf8',
+                          fontFamily: 'var(--ff-sans)', fontSize: '0.8rem', fontWeight: 500,
+                          padding: '5px 10px', outline: 'none', cursor: 'pointer',
+                        }}
+                      >
+                        {nodes.filter(n => n.node_id !== selectedId).map(n => (
+                          <option key={n.node_id} value={n.node_id}>{n.node_id}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Compare toggle */}
+                  {nodes.length > 1 && (
+                    <button
+                      onClick={toggleCompare}
+                      style={{
+                        fontFamily: 'var(--ff-sans)', fontSize: '0.75rem', fontWeight: 600,
+                        padding: '5px 12px', borderRadius: 6, cursor: 'pointer', transition: 'all 0.15s',
+                        background: compareMode ? 'rgba(56,189,248,0.12)' : 'transparent',
+                        border: compareMode ? '1px solid rgba(56,189,248,0.4)' : '1px solid var(--border)',
+                        color: compareMode ? '#38bdf8' : 'var(--txt2)',
+                      }}
+                    >
+                      {compareMode ? '× Compare' : '⇄ Compare'}
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
+            {/* Right: user info + live status + nav */}
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>
-              {/* User + org */}
               {currentUser && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div style={{ textAlign: 'right' }}>
@@ -662,7 +730,6 @@ export default function Dashboard() {
                   <ThemeToggle />
                 </div>
               )}
-              {/* Live status + nav */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 {lastUpdated && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.15)', borderRadius: 20 }}>
@@ -687,79 +754,6 @@ export default function Dashboard() {
                   onMouseLeave={e => { const a = e.currentTarget as HTMLAnchorElement; a.style.color='var(--txt2)'; a.style.borderColor='var(--border)'; }}>
                   Nodes
                 </a>
-              </div>
-              {/* Controls row */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                {initialized && (
-                  <>
-                    {/* Primary node */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      {compareMode && <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#e09a20', flexShrink: 0, display: 'inline-block' }} />}
-                      <label style={{ fontSize: '0.75rem', color: 'var(--txt2)', fontWeight: 500 }}>Node</label>
-                      <select
-                        value={selectedId}
-                        onChange={e => handleNodeChange(e.target.value)}
-                        style={{
-                          background: 'var(--surf)', border: '1px solid var(--border)',
-                          borderRadius: 6, color: 'var(--txt)',
-                          fontFamily: 'var(--ff-sans)', fontSize: '0.8rem', fontWeight: 500,
-                          padding: '5px 10px', outline: 'none', cursor: 'pointer',
-                        }}
-                      >
-                        {nodes.map(n => <option key={n.node_id} value={n.node_id}>{n.node_id}</option>)}
-                      </select>
-                      {/* Org badge */}
-                      {nodeOrgMap[selectedId] && (
-                        <span style={{
-                          fontSize: '0.68rem', fontWeight: 600, letterSpacing: '0.04em',
-                          color: 'var(--accent)', background: 'rgba(224,154,32,0.1)',
-                          border: '1px solid rgba(224,154,32,0.25)',
-                          borderRadius: 4, padding: '2px 8px', whiteSpace: 'nowrap',
-                        }}>
-                          {nodeOrgMap[selectedId]}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Compare node selector */}
-                    {compareMode && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ fontSize: '0.72rem', color: 'var(--txt3)', fontWeight: 500 }}>vs</span>
-                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#38bdf8', flexShrink: 0, display: 'inline-block' }} />
-                        <select
-                          value={compareId}
-                          onChange={e => handleCompareChange(e.target.value)}
-                          style={{
-                            background: 'var(--surf)', border: '1px solid rgba(56,189,248,0.4)',
-                            borderRadius: 6, color: '#38bdf8',
-                            fontFamily: 'var(--ff-sans)', fontSize: '0.8rem', fontWeight: 500,
-                            padding: '5px 10px', outline: 'none', cursor: 'pointer',
-                          }}
-                        >
-                          {nodes.filter(n => n.node_id !== selectedId).map(n => (
-                            <option key={n.node_id} value={n.node_id}>{n.node_id}</option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-
-                    {/* Compare toggle */}
-                    {nodes.length > 1 && (
-                      <button
-                        onClick={toggleCompare}
-                        style={{
-                          fontFamily: 'var(--ff-sans)', fontSize: '0.75rem', fontWeight: 600,
-                          padding: '5px 12px', borderRadius: 6, cursor: 'pointer', transition: 'all 0.15s',
-                          background: compareMode ? 'rgba(56,189,248,0.12)' : 'transparent',
-                          border: compareMode ? '1px solid rgba(56,189,248,0.4)' : '1px solid var(--border)',
-                          color: compareMode ? '#38bdf8' : 'var(--txt2)',
-                        }}
-                      >
-                        {compareMode ? '× Compare' : '⇄ Compare'}
-                      </button>
-                    )}
-                  </>
-                )}
               </div>
             </div>
           </div>
