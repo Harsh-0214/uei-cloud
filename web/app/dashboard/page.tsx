@@ -1006,9 +1006,18 @@ export default function Dashboard() {
 
             {/* ── Carbon Emissions ── */}
             {carbonSummary && (() => {
-              const netSaved   = carbonSummary.net_co2_saved_g;
-              const solarPct   = carbonSummary.solar_fraction * 100;
-              const netColor   = netSaved >= 0 ? 'var(--ok)' : 'var(--err)';
+              // Normalise field names — API may return total_co2_g or co2_g depending on version
+              const cs = carbonSummary as unknown as Record<string, unknown>;
+              const co2_g         = Number(cs.co2_g         ?? cs.total_co2_g         ?? 0);
+              const co2_avoided_g = Number(cs.co2_avoided_g ?? cs.total_co2_avoided_g ?? 0);
+              const net           = Number(cs.net_co2_saved_g ?? 0);
+              const gridKwh       = Number(cs.total_grid_kwh ?? 0);
+              const solarKwh      = Number(cs.total_solar_kwh ?? 0);
+              const intensity     = Number(cs.carbon_intensity ?? cs.avg_carbon_intensity ?? 400);
+              const intervals     = Number(cs.interval_count ?? cs.data_points ?? 0);
+              const solarFrac     = Number(cs.solar_fraction ?? 0);
+              const solarPct      = solarFrac * 100;
+              const netColor   = net >= 0 ? 'var(--ok)' : 'var(--err)';
               const solarColor = solarPct >= 50 ? 'var(--ok)' : solarPct >= 20 ? 'var(--warn)' : 'var(--txt2)';
               return (
                 <>
@@ -1019,18 +1028,18 @@ export default function Dashboard() {
                       <div>
                         <div style={{ fontSize: '0.62rem', fontWeight: 700, color: 'var(--txt3)', textTransform: 'uppercase', letterSpacing: '0.09em', marginBottom: 6 }}>CO₂ Emitted</div>
                         <div style={{ fontFamily: 'var(--ff-mono)', fontSize: '1.6rem', fontWeight: 800, color: 'var(--err)', lineHeight: 1 }}>
-                          {(carbonSummary.co2_g / 1000).toFixed(3)}
+                          {(co2_g / 1000).toFixed(3)}
                           <span style={{ fontSize: '0.72rem', fontWeight: 500, marginLeft: 4 }}>kg</span>
                         </div>
                         <div style={{ fontSize: '0.62rem', color: 'var(--txt3)', marginTop: 4 }}>
-                          {carbonSummary.co2_g.toFixed(1)} g total
+                          {co2_g.toFixed(1)} g total
                         </div>
                       </div>
                       {/* CO₂ Avoided */}
                       <div style={{ borderLeft: '1px solid var(--border)', paddingLeft: 16 }}>
                         <div style={{ fontSize: '0.62rem', fontWeight: 700, color: 'var(--txt3)', textTransform: 'uppercase', letterSpacing: '0.09em', marginBottom: 6 }}>CO₂ Avoided</div>
                         <div style={{ fontFamily: 'var(--ff-mono)', fontSize: '1.6rem', fontWeight: 800, color: 'var(--ok)', lineHeight: 1 }}>
-                          {(carbonSummary.co2_avoided_g / 1000).toFixed(3)}
+                          {(co2_avoided_g / 1000).toFixed(3)}
                           <span style={{ fontSize: '0.72rem', fontWeight: 500, marginLeft: 4 }}>kg</span>
                         </div>
                         <div style={{ fontSize: '0.62rem', color: 'var(--txt3)', marginTop: 4 }}>
@@ -1041,11 +1050,11 @@ export default function Dashboard() {
                       <div style={{ borderLeft: '1px solid var(--border)', paddingLeft: 16 }}>
                         <div style={{ fontSize: '0.62rem', fontWeight: 700, color: 'var(--txt3)', textTransform: 'uppercase', letterSpacing: '0.09em', marginBottom: 6 }}>Net Impact</div>
                         <div style={{ fontFamily: 'var(--ff-mono)', fontSize: '1.6rem', fontWeight: 800, color: netColor, lineHeight: 1 }}>
-                          {netSaved >= 0 ? '+' : ''}{(netSaved / 1000).toFixed(3)}
+                          {net >= 0 ? '+' : ''}{(net / 1000).toFixed(3)}
                           <span style={{ fontSize: '0.72rem', fontWeight: 500, marginLeft: 4 }}>kg</span>
                         </div>
                         <div style={{ fontSize: '0.62rem', color: 'var(--txt3)', marginTop: 4 }}>
-                          {netSaved >= 0 ? 'net saved' : 'net emitted'}
+                          {net >= 0 ? 'net saved' : 'net emitted'}
                         </div>
                       </div>
                       {/* Solar Fraction */}
@@ -1063,10 +1072,10 @@ export default function Dashboard() {
                     {/* Footer row */}
                     <div style={{ paddingTop: 12, borderTop: '1px solid var(--border)', display: 'flex', gap: 20, flexWrap: 'wrap' }}>
                       {[
-                        { label: 'Grid Import', value: carbonSummary.total_grid_kwh.toFixed(4) + ' kWh' },
-                        { label: 'Solar Gen',   value: carbonSummary.total_solar_kwh.toFixed(4) + ' kWh' },
-                        { label: 'Intensity',   value: carbonSummary.carbon_intensity.toFixed(0) + ' gCO₂/kWh' },
-                        { label: 'Intervals',   value: String(carbonSummary.interval_count) },
+                        { label: 'Grid Import', value: gridKwh.toFixed(4) + ' kWh' },
+                        { label: 'Solar Gen',   value: solarKwh.toFixed(4) + ' kWh' },
+                        { label: 'Intensity',   value: intensity.toFixed(0) + ' gCO₂/kWh' },
+                        { label: 'Intervals',   value: String(intervals) },
                       ].map(({ label, value }) => (
                         <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                           <span style={{ fontSize: '0.62rem', color: 'var(--txt3)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{label}</span>
