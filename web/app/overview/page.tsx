@@ -190,7 +190,7 @@ export default function OverviewPage() {
 
   async function fetchLogs() {
     try {
-      const r = await fetch('/api/logs?range=15m&limit=40', { cache: 'no-store' });
+      const r = await fetch('/api/logs?range=5m&limit=40', { cache: 'no-store' });
       if (r.ok) {
         const data = await r.json();
         if (Array.isArray(data)) setLogs(data.slice(0, 40));
@@ -354,7 +354,7 @@ export default function OverviewPage() {
 
       {/* Recent logs */}
       <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--txt3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 14 }}>
-        Recent activity · last 15 min
+        Recent activity · last 5 min
       </div>
       <div style={{ background: 'var(--surf)', border: '1px solid var(--border)', borderRadius: 'var(--r)', overflow: 'hidden', marginBottom: 40 }}>
         {logs.length === 0 ? (
