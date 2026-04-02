@@ -30,13 +30,20 @@ try:
 except ImportError:
     sys.exit("Missing dependency — run:  pip install requests")
 
-# ── Load Carbon algorithm (graceful fallback if algorithms/ not present) ───────
+# ── Load algorithms (graceful fallback if algorithms/ not present) ─────────────
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
     from algorithms.carbon import CarbonCalculator
     _CARBON_AVAILABLE = True
 except ImportError:
     _CARBON_AVAILABLE = False
+
+try:
+    from algorithms.cac import ContextAwareControl
+    from algorithms.rda import RiskDeratingAlgorithm
+    _ALGO_AVAILABLE = True
+except ImportError:
+    _ALGO_AVAILABLE = False
 
 # ── ANSI colours ─────────────────────────────────────────────────────────────
 
@@ -78,6 +85,24 @@ def post_carbon(api_url: str, carbon: "CarbonCalculator", data: dict, interval_s
     except Exception:
         pass
 
+def post_algo(api_url: str, cac: "ContextAwareControl", rda: "RiskDeratingAlgorithm",
+              node_id: str, data: dict) -> None:
+    """Compute CAC + RDA outputs and POST to /algo; silently swallow errors."""
+    try:
+        cac_out = cac.compute(data)
+        requests.post(f"{api_url}/algo", json={
+            "node_id": node_id, "algo": "CAC", "output": cac_out,
+        }, timeout=5)
+    except Exception:
+        pass
+    try:
+        rda_out = rda.compute(data)
+        requests.post(f"{api_url}/algo", json={
+            "node_id": node_id, "algo": "RDA", "output": rda_out,
+        }, timeout=5)
+    except Exception:
+        pass
+
 # ── BMS Node 1 — pi_bms_1 — mixed discharge / charge ────────────────────────
 
 def _run_bms1(api_url: str, period: float) -> None:
@@ -90,6 +115,8 @@ def _run_bms1(api_url: str, period: float) -> None:
     fault_active = False
     faults_cleared_min = 27.0
     carbon = CarbonCalculator("pi_bms_1", api_url) if _CARBON_AVAILABLE else None
+    cac    = ContextAwareControl("pi_bms_1", api_url) if _ALGO_AVAILABLE else None
+    rda    = RiskDeratingAlgorithm() if _ALGO_AVAILABLE else None
 
     log(CYAN, tag, f"pi_bms_1  →  {url}  (mixed discharge/charge)")
     while not _stop.is_set():
