@@ -17,6 +17,7 @@ Press Ctrl+C to stop all simulators cleanly.
 from __future__ import annotations
 
 import argparse
+import os
 import random
 import signal
 import sys
@@ -28,6 +29,14 @@ try:
     import requests
 except ImportError:
     sys.exit("Missing dependency — run:  pip install requests")
+
+# ── Load Carbon algorithm (graceful fallback if algorithms/ not present) ───────
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from algorithms.carbon import CarbonCalculator
+    _CARBON_AVAILABLE = True
+except ImportError:
+    _CARBON_AVAILABLE = False
 
 # ── ANSI colours ─────────────────────────────────────────────────────────────
 
@@ -61,6 +70,14 @@ def post(url: str, payload: dict, timeout: float = 5.0) -> None:
     r = requests.post(url, json=payload, timeout=timeout)
     r.raise_for_status()
 
+def post_carbon(api_url: str, carbon: "CarbonCalculator", data: dict, interval_s: float, is_pv: bool) -> None:
+    """Compute and POST carbon result; silently swallow errors."""
+    try:
+        result = carbon.compute_pv(data, interval_s) if is_pv else carbon.compute_bms(data, interval_s)
+        requests.post(f"{api_url}/carbon", json=result, timeout=5)
+    except Exception:
+        pass
+
 # ── BMS Node 1 — pi_bms_1 — mixed discharge / charge ────────────────────────
 
 def _run_bms1(api_url: str, period: float) -> None:
@@ -72,6 +89,7 @@ def _run_bms1(api_url: str, period: float) -> None:
     ccl, dcl = 80.0, 120.0
     fault_active = False
     faults_cleared_min = 27.0
+    carbon = CarbonCalculator("pi_bms_1", api_url) if _CARBON_AVAILABLE else None
 
     log(CYAN, tag, f"pi_bms_1  →  {url}  (mixed discharge/charge)")
     while not _stop.is_set():
@@ -109,6 +127,7 @@ def _run_bms1(api_url: str, period: float) -> None:
             log(CYAN, tag,
                 f"SOC={pkt['soc']}%  V={pkt['pack_voltage']}  "
                 f"I={pkt['pack_current']:+.2f}A  fault={pkt['fault_active']}")
+            if carbon: post_carbon(api_url, carbon, pkt, period, is_pv=False)
         except Exception as exc:
             log(CYAN, tag, f"{RED}ERROR{R} {exc}")
         _stop.wait(period)
@@ -125,6 +144,7 @@ def _run_bms2(api_url: str, period: float) -> None:
     fault_active = False
     faults_cleared_min = 0.0
     CELLS = 14
+    carbon = CarbonCalculator("bms-node-2", api_url) if _CARBON_AVAILABLE else None
 
     log(GREEN, tag, f"bms-node-2  →  {url}  (charge-cycle: low SOC → full → discharge)")
     while not _stop.is_set():
@@ -172,6 +192,7 @@ def _run_bms2(api_url: str, period: float) -> None:
             log(GREEN, tag,
                 f"SOC={pkt['soc']}%  V={pkt['pack_voltage']}  "
                 f"I={pkt['pack_current']:+.2f}A [{direction}]  fault={pkt['fault_active']}")
+            if carbon: post_carbon(api_url, carbon, pkt, period, is_pv=False)
         except Exception as exc:
             log(GREEN, tag, f"{RED}ERROR{R} {exc}")
         _stop.wait(period)
@@ -190,6 +211,7 @@ def _run_bms3(api_url: str, period: float) -> None:
     CELLS = 14
     FAULT_TEMP, CLEAR_TEMP = 60.0, 52.0
     DERATE_CCL, DERATE_DCL = 5.0, 15.0
+    carbon = CarbonCalculator("bms-node-3", api_url) if _CARBON_AVAILABLE else None
 
     log(YELLOW, tag, f"bms-node-3  →  {url}  (thermal stress — watch for FAULT events)")
     while not _stop.is_set():
@@ -240,6 +262,7 @@ def _run_bms3(api_url: str, period: float) -> None:
             log(YELLOW, tag,
                 f"SOC={pkt['soc']}%  T={pkt['temp_high']:.1f}/{pkt['temp_low']:.1f}°C  "
                 f"I={pkt['pack_current']:+.2f}A  CCL={pkt['ccl']}  DCL={pkt['dcl']}  {fault_str}")
+            if carbon: post_carbon(api_url, carbon, pkt, period, is_pv=False)
         except Exception as exc:
             log(YELLOW, tag, f"{RED}ERROR{R} {exc}")
         _stop.wait(period)
@@ -252,6 +275,7 @@ def _run_pv1(api_url: str, period: float) -> None:
     invr1, invr2 = 120.0, 118.0
     ld1, ld2, ld3, ld4 = 5.0, 4.5, 6.0, 3.8
     bv1, bv2 = 48.7, 48.6
+    carbon = CarbonCalculator("pi_pv_1", api_url) if _CARBON_AVAILABLE else None
 
     log(MAGENTA, tag, f"pi_pv_1  →  {url}  (solar inverter + loads)")
     while not _stop.is_set():
@@ -277,6 +301,7 @@ def _run_pv1(api_url: str, period: float) -> None:
             log(MAGENTA, tag,
                 f"invr1={pkt['invr1']}  invr2={pkt['invr2']}  "
                 f"load={total_load:.2f}  bv1={pkt['bv1']}")
+            if carbon: post_carbon(api_url, carbon, pkt, period, is_pv=True)
         except Exception as exc:
             log(MAGENTA, tag, f"{RED}ERROR{R} {exc}")
         _stop.wait(period)
@@ -293,6 +318,7 @@ def _run_bms_sim(api_url: str, period: float) -> None:
     fault_active = False
     faults_cleared_min = 0.0
     CELLS = 14
+    carbon = CarbonCalculator("pi_bms_sim", api_url) if _CARBON_AVAILABLE else None
 
     log(CYAN, tag, f"pi_bms_sim  →  {url}  (sim Pi: deep discharge recovery)")
     while not _stop.is_set():
@@ -340,6 +366,7 @@ def _run_bms_sim(api_url: str, period: float) -> None:
             log(CYAN, tag,
                 f"SOC={pkt['soc']}%  V={pkt['pack_voltage']}  "
                 f"I={pkt['pack_current']:+.2f}A [{direction}]  fault={pkt['fault_active']}")
+            if carbon: post_carbon(api_url, carbon, pkt, period, is_pv=False)
         except Exception as exc:
             log(CYAN, tag, f"{RED}ERROR{R} {exc}")
         _stop.wait(period)
@@ -353,6 +380,7 @@ def _run_pv_sim(api_url: str, period: float) -> None:
     invr1, invr2 = 95.0, 88.0
     ld1, ld2, ld3, ld4 = 8.0, 6.2, 9.1, 5.5
     bv1, bv2 = 50.1, 49.8
+    carbon = CarbonCalculator("pi_pv_sim", api_url) if _CARBON_AVAILABLE else None
 
     log(GREEN, tag, f"pi_pv_sim  →  {url}  (sim Pi: solar inverter + loads)")
     while not _stop.is_set():
@@ -378,6 +406,7 @@ def _run_pv_sim(api_url: str, period: float) -> None:
             log(GREEN, tag,
                 f"invr1={pkt['invr1']}  invr2={pkt['invr2']}  "
                 f"load={total_load:.2f}  bv1={pkt['bv1']}")
+            if carbon: post_carbon(api_url, carbon, pkt, period, is_pv=True)
         except Exception as exc:
             log(GREEN, tag, f"{RED}ERROR{R} {exc}")
         _stop.wait(period)
