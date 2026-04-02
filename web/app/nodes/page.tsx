@@ -16,6 +16,7 @@ interface Me {
 
 export default function NodesPage() {
   const [nodes,    setNodes]    = useState<Node[]>([]);
+  const [pvIds,    setPvIds]    = useState<Set<string>>(new Set());
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState('');
   const [me,       setMe]       = useState<Me | null>(null);
@@ -32,28 +33,28 @@ export default function NodesPage() {
 
   async function loadNodes() {
     try {
-      // Fetch from both sources in parallel:
-      // 1. telemetry/nodes — all node_ids that have ever posted data (always reliable)
-      // 2. admin/nodes     — registered nodes with org info (may be empty if seed not run)
-      const [telRes, regRes] = await Promise.all([
+      const [telRes, regRes, pvRes] = await Promise.all([
         fetch('/api/telemetry/nodes', { cache: 'no-store' }),
         fetch('/api/admin/nodes',     { cache: 'no-store' }),
+        fetch('/api/pv/latest',       { cache: 'no-store' }),
       ]);
 
-      const telIds: string[]        = telRes.ok  ? await telRes.json()  : [];
-      const regNodes: Node[]        = regRes.ok  ? await regRes.json()  : [];
+      const telIds: string[]   = telRes.ok ? await telRes.json() : [];
+      const regNodes: Node[]   = regRes.ok ? await regRes.json() : [];
+      const pvLatest: { node_id: string }[] = pvRes.ok ? await pvRes.json() : [];
 
-      // Build a map of node_id → org_name from registered nodes
       const orgMap: Record<string, string> = {};
       if (Array.isArray(regNodes)) {
         for (const n of regNodes) orgMap[n.node_id] = n.org_name;
       }
 
-      // Merge: start from telemetry nodes, fill in org from registration table;
-      // also include any registered nodes that haven't posted telemetry yet.
+      const pvIdSet = new Set(Array.isArray(pvLatest) ? pvLatest.map(r => r.node_id) : []);
+      setPvIds(pvIdSet);
+
       const allIds = Array.from(new Set([
         ...(Array.isArray(telIds) ? telIds : []),
         ...(Array.isArray(regNodes) ? regNodes.map(n => n.node_id) : []),
+        ...Array.from(pvIdSet),
       ])).sort();
 
       setNodes(allIds.map(id => ({ node_id: id, org_name: orgMap[id] ?? '' })));
@@ -194,6 +195,11 @@ export default function NodesPage() {
                         <td style={{ padding: '11px 20px', fontSize: '0.82rem', color: 'var(--txt)', fontFamily: "'DM Mono', monospace" }}>
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                             {n.node_id}
+                            {pvIds.has(n.node_id) && (
+                              <span style={{ fontSize: '0.6rem', fontWeight: 700, letterSpacing: '0.06em', color: '#facc15', background: 'rgba(250,204,21,0.1)', border: '1px solid rgba(250,204,21,0.25)', borderRadius: 4, padding: '1px 6px', fontFamily: 'var(--ff-sans)' }}>
+                                PV
+                              </span>
+                            )}
                             {!n.org_name && (
                               <span style={{ fontSize: '0.6rem', fontWeight: 700, letterSpacing: '0.06em', color: 'var(--txt3)', background: 'var(--surf2)', border: '1px solid var(--border)', borderRadius: 4, padding: '1px 6px', fontFamily: 'var(--ff-sans)' }}>
                                 telemetry only
