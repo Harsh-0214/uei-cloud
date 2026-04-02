@@ -32,10 +32,31 @@ export default function NodesPage() {
 
   async function loadNodes() {
     try {
-      const r = await fetch('/api/admin/nodes', { cache: 'no-store' });
-      const data = await r.json();
-      if (Array.isArray(data)) setNodes(data);
-      else setError(data.detail ?? 'Failed to load nodes.');
+      // Fetch from both sources in parallel:
+      // 1. telemetry/nodes — all node_ids that have ever posted data (always reliable)
+      // 2. admin/nodes     — registered nodes with org info (may be empty if seed not run)
+      const [telRes, regRes] = await Promise.all([
+        fetch('/api/telemetry/nodes', { cache: 'no-store' }),
+        fetch('/api/admin/nodes',     { cache: 'no-store' }),
+      ]);
+
+      const telIds: string[]        = telRes.ok  ? await telRes.json()  : [];
+      const regNodes: Node[]        = regRes.ok  ? await regRes.json()  : [];
+
+      // Build a map of node_id → org_name from registered nodes
+      const orgMap: Record<string, string> = {};
+      if (Array.isArray(regNodes)) {
+        for (const n of regNodes) orgMap[n.node_id] = n.org_name;
+      }
+
+      // Merge: start from telemetry nodes, fill in org from registration table;
+      // also include any registered nodes that haven't posted telemetry yet.
+      const allIds = Array.from(new Set([
+        ...(Array.isArray(telIds) ? telIds : []),
+        ...(Array.isArray(regNodes) ? regNodes.map(n => n.node_id) : []),
+      ])).sort();
+
+      setNodes(allIds.map(id => ({ node_id: id, org_name: orgMap[id] ?? '' })));
     } catch {
       setError('Network error.');
     } finally {
@@ -92,14 +113,15 @@ export default function NodesPage() {
     window.location.href = '/';
   }
 
-  // Group by org
+  // Group by org; nodes with no org go under "Unregistered"
   const orgs: Record<string, Node[]> = {};
   for (const n of nodes) {
-    (orgs[n.org_name] ??= []).push(n);
+    const key = n.org_name || 'Unregistered';
+    (orgs[key] ??= []).push(n);
   }
 
-  // Unique org names for the add-form datalist
-  const orgNames = Object.keys(orgs);
+  // Unique org names (excluding "Unregistered") for the add-form datalist
+  const orgNames = Object.keys(orgs).filter(k => k !== 'Unregistered').sort();
 
   const isAdmin = me?.role === 'admin' || me?.role === 'superadmin';
 
@@ -204,7 +226,14 @@ export default function NodesPage() {
                     {members.map((n, i) => (
                       <tr key={n.node_id} style={{ borderBottom: i < members.length - 1 ? '1px solid var(--border)' : 'none' }}>
                         <td style={{ padding: '11px 20px', fontSize: '0.82rem', color: 'var(--txt)', fontFamily: "'DM Mono', monospace" }}>
-                          {n.node_id}
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                            {n.node_id}
+                            {!n.org_name && (
+                              <span style={{ fontSize: '0.6rem', fontWeight: 700, letterSpacing: '0.06em', color: 'var(--txt3)', background: 'var(--surf2)', border: '1px solid var(--border)', borderRadius: 4, padding: '1px 6px', fontFamily: 'var(--ff-sans)' }}>
+                                telemetry only
+                              </span>
+                            )}
+                          </span>
                         </td>
                         {isAdmin && (
                           <td style={{ padding: '11px 20px', textAlign: 'right' }}>
