@@ -1007,7 +1007,7 @@ export default function Dashboard() {
             {/* ── Carbon Emissions ── */}
             {carbonSummary && (() => {
               // Normalise field names — API may return total_co2_g or co2_g depending on version
-              const cs = carbonSummary as Record<string, unknown>;
+              const cs = carbonSummary as unknown as Record<string, unknown>;
               const co2_g         = Number(cs.co2_g         ?? cs.total_co2_g         ?? 0);
               const co2_avoided_g = Number(cs.co2_avoided_g ?? cs.total_co2_avoided_g ?? 0);
               const net           = Number(cs.net_co2_saved_g ?? 0);
