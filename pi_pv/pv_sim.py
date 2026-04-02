@@ -1,15 +1,15 @@
 """
 pv_sim.py — PV inverter + load data simulator for Raspberry Pi.
 
-Generates realistic PV telemetry (2 inverters, 4 load channels, 2 battery
-voltages) and writes each reading directly to the cloud PostgreSQL
-pv_telemetry table.  Every reading is also appended to pv_data.txt as a
-human-readable log.
+Generates PV telemetry and writes directly to the cloud PostgreSQL
+pv_telemetry table.  Every reading is also appended to pv_data.txt.
+
+    node_id = pi_pv_1
+    pv_id   = pv_1
 
 Usage:
-    python3 pv_sim.py                  # runs with default settings
-    python3 pv_sim.py --period 5       # one reading every 5 seconds
-    python3 pv_sim.py --node pi_pv_1   # override node id
+    python3 pv_sim.py              # 2-second interval (default)
+    python3 pv_sim.py --period 5   # one reading every 5 seconds
 
 Press Ctrl+C to stop.
 """
@@ -31,6 +31,11 @@ except ImportError:
 
 from db_connect import get_conn
 
+# ── Fixed identifiers ─────────────────────────────────────────────────────────
+
+NODE_ID = "pi_pv_1"
+PV_ID   = "pv_1"
+
 # ── Output log file ───────────────────────────────────────────────────────────
 
 LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pv_data.txt")
@@ -48,6 +53,9 @@ def append_log(line: str) -> None:
         f.write(line + "\n")
 
 # ── DB insert ─────────────────────────────────────────────────────────────────
+# Columns match pv_telemetry exactly:
+#   invr1/invr2/ld1-ld4  → numeric(10,2)  rounded to 2 dp
+#   bv1/bv2              → numeric(10,4)  rounded to 4 dp
 
 INSERT_SQL = """
 INSERT INTO pv_telemetry (ts_utc, node_id, pv_id, invr1, invr2, ld1, ld2, ld3, ld4, bv1, bv2)
@@ -64,24 +72,24 @@ def insert_row(conn: psycopg2.extensions.connection, row: dict) -> None:
         ))
     conn.commit()
 
-# ── Simulation state ──────────────────────────────────────────────────────────
+# ── Simulation ────────────────────────────────────────────────────────────────
 
-def run(node_id: str, pv_id: str, period: float) -> None:
+def run(period: float) -> None:
     invr1, invr2 = 120.0, 118.0
     ld1, ld2, ld3, ld4 = 5.0, 4.5, 6.0, 3.8
     bv1, bv2 = 48.7, 48.6
 
-    print(f"[pv_sim] node={node_id}  pv_id={pv_id}  period={period}s")
+    print(f"[pv_sim] node_id={NODE_ID}  pv_id={PV_ID}  period={period}s")
     print(f"[pv_sim] Logging to {LOG_FILE}")
 
-    # Write header to log file if it is new / empty
     if not os.path.exists(LOG_FILE) or os.path.getsize(LOG_FILE) == 0:
         append_log("ts_utc,node_id,pv_id,invr1,invr2,ld1,ld2,ld3,ld4,bv1,bv2")
 
     conn = get_conn()
-    print(f"[pv_sim] DB connected")
+    print("[pv_sim] DB connected")
 
     stop = False
+
     def _shutdown(sig, frame):
         nonlocal stop
         stop = True
@@ -100,30 +108,28 @@ def run(node_id: str, pv_id: str, period: float) -> None:
         bv1   = clamp(bv1   + random.uniform(-0.05, 0.05), 40.0, 60.0)
         bv2   = clamp(bv2   + random.uniform(-0.05, 0.05), 40.0, 60.0)
 
-        ts   = utc_now()
-        row  = {
+        ts  = utc_now()
+        row = {
             "ts_utc":  ts,
-            "node_id": node_id,
-            "pv_id":   pv_id,
-            "invr1":   round(invr1, 3),
-            "invr2":   round(invr2, 3),
-            "ld1":     round(ld1, 3),
-            "ld2":     round(ld2, 3),
-            "ld3":     round(ld3, 3),
-            "ld4":     round(ld4, 3),
-            "bv1":     round(bv1, 3),
-            "bv2":     round(bv2, 3),
+            "node_id": NODE_ID,
+            "pv_id":   PV_ID,
+            "invr1":   round(invr1, 2),   # numeric(10,2)
+            "invr2":   round(invr2, 2),
+            "ld1":     round(ld1,   2),
+            "ld2":     round(ld2,   2),
+            "ld3":     round(ld3,   2),
+            "ld4":     round(ld4,   2),
+            "bv1":     round(bv1,   4),   # numeric(10,4)
+            "bv2":     round(bv2,   4),
         }
 
-        total_load = ld1 + ld2 + ld3 + ld4
+        total_load = round(ld1 + ld2 + ld3 + ld4, 2)
 
-        # ── Write to DB ───────────────────────────────────────────────────────
         try:
             insert_row(conn, row)
             db_status = "OK"
         except Exception as exc:
             db_status = f"DB ERROR: {exc}"
-            # Attempt reconnect on next loop
             try:
                 conn.close()
             except Exception:
@@ -133,19 +139,16 @@ def run(node_id: str, pv_id: str, period: float) -> None:
             except Exception:
                 pass
 
-        # ── Write to text log ─────────────────────────────────────────────────
-        csv_line = (
-            f"{ts},{node_id},{pv_id},"
+        append_log(
+            f"{ts},{NODE_ID},{PV_ID},"
             f"{row['invr1']},{row['invr2']},"
             f"{row['ld1']},{row['ld2']},{row['ld3']},{row['ld4']},"
             f"{row['bv1']},{row['bv2']}"
         )
-        append_log(csv_line)
 
-        # ── Console ───────────────────────────────────────────────────────────
         print(
-            f"[{ts}]  invr1={row['invr1']:7.3f}  invr2={row['invr2']:7.3f}  "
-            f"load={total_load:6.2f}  bv1={row['bv1']:.3f}  bv2={row['bv2']:.3f}"
+            f"[{ts}]  invr1={row['invr1']:7.2f}  invr2={row['invr2']:7.2f}  "
+            f"load={total_load:6.2f}  bv1={row['bv1']:.4f}  bv2={row['bv2']:.4f}"
             f"  [{db_status}]"
         )
 
@@ -160,12 +163,10 @@ def run(node_id: str, pv_id: str, period: float) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--node",   default="pi_pv_1", help="node_id reported to the DB")
-    ap.add_argument("--pv-id",  default="pv_1",    help="pv_id reported to the DB")
     ap.add_argument("--period", type=float, default=2.0,
                     help="Seconds between readings (default: 2)")
     args = ap.parse_args()
-    run(args.node, args.pv_id, args.period)
+    run(args.period)
 
 
 if __name__ == "__main__":
