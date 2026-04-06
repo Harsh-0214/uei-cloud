@@ -96,6 +96,48 @@ def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
     return current_user
 
+
+# ── Alert helpers ─────────────────────────────────────────────────────────────
+
+def _maybe_create_alert(node_id, severity, alert_type, message, source, metadata=None):
+    """
+    Create an alert ONLY if there is no unresolved alert of the same
+    alert_type for the same node_id. Prevents duplicate alerts since
+    telemetry arrives every 2 seconds.
+    """
+    try:
+        with db_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT id FROM alerts WHERE node_id = %s AND alert_type = %s AND resolved = FALSE",
+                    (node_id, alert_type)
+                )
+                if cur.fetchone():
+                    return
+                cur.execute(
+                    """INSERT INTO alerts (ts_utc, node_id, severity, alert_type, message, source, metadata)
+                       VALUES (NOW(), %s, %s, %s, %s, %s, %s::jsonb)""",
+                    (node_id, severity, alert_type, message, source,
+                     json.dumps(metadata or {}))
+                )
+    except Exception:
+        pass  # alert creation is non-critical — never block telemetry
+
+
+def _maybe_resolve_alert(node_id, alert_type):
+    """Auto-resolve an unresolved alert when the condition clears."""
+    try:
+        with db_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """UPDATE alerts SET resolved = TRUE, resolved_at = NOW()
+                       WHERE node_id = %s AND alert_type = %s AND resolved = FALSE""",
+                    (node_id, alert_type)
+                )
+    except Exception:
+        pass
+
+
 # ── Auth request/response models ─────────────────────────────────────────────
 
 class RegisterRequest(BaseModel):
@@ -306,6 +348,65 @@ def ingest(pkt: TelemetryPacket):
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(q, vals)
+
+    # --- Alert checks ---
+    # 1. Fault active
+    if pkt.fault_active:
+        _maybe_create_alert(
+            pkt.node_id, "CRITICAL", "FAULT_ACTIVE",
+            f"Fault active on {pkt.node_id} — BMS protection engaged",
+            "TELEMETRY",
+            {"soc": pkt.soc, "temp_high": pkt.temp_high, "pack_voltage": pkt.pack_voltage}
+        )
+    else:
+        _maybe_resolve_alert(pkt.node_id, "FAULT_ACTIVE")
+
+    # 2. Low SOC
+    if pkt.soc < 10.0:
+        _maybe_create_alert(
+            pkt.node_id, "CRITICAL", "LOW_SOC",
+            f"SOC critically low at {pkt.soc:.1f}% on {pkt.node_id}",
+            "TELEMETRY", {"soc": pkt.soc}
+        )
+    elif pkt.soc < 20.0:
+        _maybe_create_alert(
+            pkt.node_id, "WARNING", "LOW_SOC",
+            f"SOC low at {pkt.soc:.1f}% on {pkt.node_id}",
+            "TELEMETRY", {"soc": pkt.soc}
+        )
+    else:
+        _maybe_resolve_alert(pkt.node_id, "LOW_SOC")
+
+    # 3. Cell imbalance (> 0.3V spread)
+    cell_spread = abs(pkt.highest_cell_v - pkt.lowest_cell_v)
+    if cell_spread > 0.3:
+        _maybe_create_alert(
+            pkt.node_id, "WARNING", "CELL_IMBALANCE",
+            f"Cell imbalance of {cell_spread:.3f}V on {pkt.node_id}",
+            "TELEMETRY",
+            {"highest_cell_v": pkt.highest_cell_v, "lowest_cell_v": pkt.lowest_cell_v,
+             "spread": round(cell_spread, 3)}
+        )
+    else:
+        _maybe_resolve_alert(pkt.node_id, "CELL_IMBALANCE")
+
+    # 4. Over-temperature
+    if pkt.temp_high >= 60.0:
+        _maybe_create_alert(
+            pkt.node_id, "CRITICAL", "OVERTEMP",
+            f"Temperature critical at {pkt.temp_high:.1f}°C on {pkt.node_id}",
+            "TELEMETRY",
+            {"temp_high": pkt.temp_high, "temp_low": pkt.temp_low}
+        )
+    elif pkt.temp_high >= 45.0:
+        _maybe_create_alert(
+            pkt.node_id, "WARNING", "TEMP_WARNING",
+            f"Temperature elevated at {pkt.temp_high:.1f}°C on {pkt.node_id}",
+            "TELEMETRY", {"temp_high": pkt.temp_high}
+        )
+    else:
+        _maybe_resolve_alert(pkt.node_id, "OVERTEMP")
+        _maybe_resolve_alert(pkt.node_id, "TEMP_WARNING")
 
     return {"status": "ok", "node_id": pkt.node_id}
 
@@ -705,6 +806,52 @@ def ingest_algo_event(pkt: AlgoEventPacket) -> Any:
                 "INSERT INTO algo_events (ts_utc, node_id, algo, output) VALUES (%s, %s, %s, %s::jsonb)",
                 (ts, pkt.node_id, pkt.algo.upper(), json.dumps(pkt.output)),
             )
+
+    # --- Alert checks from algorithm output ---
+    output = pkt.output
+    algo_upper = pkt.algo.upper()
+
+    if algo_upper == "CAC":
+        action = output.get("action", "NORMAL")
+        if action in ("FAULT_DERATE", "OVERTEMP_DERATE"):
+            _maybe_create_alert(
+                pkt.node_id, "CRITICAL", "CRITICAL_DERATE",
+                f"CAC issued {action} on {pkt.node_id} — current limited to {output.get('adjusted_current_limit', '?')}A",
+                "CAC",
+                {"action": action, "adjusted_current_limit": output.get("adjusted_current_limit"),
+                 "thermal_directive": output.get("thermal_directive")}
+            )
+        elif action == "TEMP_WARN_DERATE":
+            _maybe_create_alert(
+                pkt.node_id, "WARNING", "CRITICAL_DERATE",
+                f"CAC issued thermal warning on {pkt.node_id} — derated to {output.get('adjusted_current_limit', '?')}A",
+                "CAC",
+                {"action": action, "adjusted_current_limit": output.get("adjusted_current_limit")}
+            )
+        else:
+            _maybe_resolve_alert(pkt.node_id, "CRITICAL_DERATE")
+
+    elif algo_upper == "RDA":
+        risk_score = output.get("risk_score", 0)
+        derating_level = output.get("derating_level", "NORMAL")
+        if derating_level == "CRITICAL":
+            _maybe_create_alert(
+                pkt.node_id, "CRITICAL", "HIGH_RISK",
+                f"RDA risk score {risk_score}/100 (CRITICAL) on {pkt.node_id} — power capped to {output.get('derating_factor', 1.0) * 100:.0f}%",
+                "RDA",
+                {"risk_score": risk_score, "derating_level": derating_level,
+                 "subscores": output.get("subscores", {})}
+            )
+        elif derating_level == "WARNING":
+            _maybe_create_alert(
+                pkt.node_id, "WARNING", "HIGH_RISK",
+                f"RDA risk score {risk_score}/100 (WARNING) on {pkt.node_id}",
+                "RDA",
+                {"risk_score": risk_score, "derating_level": derating_level}
+            )
+        else:
+            _maybe_resolve_alert(pkt.node_id, "HIGH_RISK")
+
     return {"status": "ok", "node_id": pkt.node_id, "algo": pkt.algo}
 
 
@@ -930,6 +1077,76 @@ def update_carbon_config(
                 fields,
             )
     return {"status": "ok", "node_id": node_id}
+
+
+# ── Alerts ────────────────────────────────────────────────────────────────────
+
+@app.get("/alerts")
+def list_alerts(
+    node_id:  Optional[str]  = None,
+    severity: Optional[str]  = None,
+    resolved: Optional[bool] = None,
+    limit:    int            = 100,
+    _user:    dict           = Depends(get_current_user),
+) -> Any:
+    """Return alerts filtered by node, severity, and/or resolved status."""
+    where_parts = []
+    params: list = []
+    if node_id:
+        where_parts.append("node_id = %s")
+        params.append(node_id)
+    if severity:
+        where_parts.append("severity = %s")
+        params.append(severity.upper())
+    if resolved is not None:
+        where_parts.append("resolved = %s")
+        params.append(resolved)
+    where = ("WHERE " + " AND ".join(where_parts)) if where_parts else ""
+    limit = min(limit, 500)
+    params.append(limit)
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(f"SELECT * FROM alerts {where} ORDER BY ts_utc DESC LIMIT %s", params)
+            rows = cur.fetchall()
+    return [dict(r) for r in rows]
+
+
+@app.get("/alerts/active")
+def active_alerts(
+    node_id: Optional[str] = None,
+    _user:   dict          = Depends(get_current_user),
+) -> Any:
+    """Return only unresolved alerts, ordered by severity then time."""
+    if node_id:
+        q = """SELECT * FROM alerts WHERE resolved = FALSE AND node_id = %s
+               ORDER BY CASE severity WHEN 'CRITICAL' THEN 0 WHEN 'WARNING' THEN 1 ELSE 2 END, ts_utc DESC"""
+        params = (node_id,)
+    else:
+        q = """SELECT * FROM alerts WHERE resolved = FALSE
+               ORDER BY CASE severity WHEN 'CRITICAL' THEN 0 WHEN 'WARNING' THEN 1 ELSE 2 END, ts_utc DESC"""
+        params = None
+    with db_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(q, params) if params else cur.execute(q)
+            rows = cur.fetchall()
+    return [dict(r) for r in rows]
+
+
+@app.patch("/alerts/{alert_id}/resolve")
+def resolve_alert(
+    alert_id: int,
+    _user:    dict = Depends(get_current_user),
+) -> Any:
+    """Manually resolve an alert."""
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE alerts SET resolved = TRUE, resolved_at = NOW() WHERE id = %s AND resolved = FALSE RETURNING id",
+                (alert_id,),
+            )
+            if cur.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Alert not found or already resolved")
+    return {"status": "ok", "alert_id": alert_id}
 
 
 @app.get("/stream/latest")

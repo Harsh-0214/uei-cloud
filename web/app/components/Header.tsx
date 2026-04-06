@@ -1,6 +1,7 @@
 'use client';
 
 import ThemeToggle from './ThemeToggle';
+import AlertBell from './AlertBell';
 
 interface Crumb {
   label: string;
@@ -186,6 +187,7 @@ export default function Header({ crumbs, nav = [], user, extra, onLogout }: Head
             </div>
           )}
 
+          <AlertBell />
           <ThemeToggle />
         </div>
       </div>
