@@ -34,19 +34,25 @@ interface PvRow {
   bv2:     number;
 }
 
-interface LogRow {
-  ts_utc:       string;
-  node_id:      string;
-  soc:          number;
-  pack_voltage: number;
-  temp_high:    number;
-  fault_active: boolean;
-}
-
 interface Me {
   email:    string;
   role:     string;
   org_name: string;
+}
+
+interface Alert {
+  id:         number;
+  ts_utc:     string;
+  node_id:    string;
+  severity:   string;
+  alert_type: string;
+  message:    string;
+  source:     string;
+}
+
+interface WeatherData {
+  temp: number;
+  code: number;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -81,6 +87,30 @@ function tempColor(t: number): string {
   if (t >= 50) return 'var(--err)';
   if (t >= 40) return 'var(--warn)';
   return 'var(--txt)';
+}
+
+function weatherDesc(code: number): string {
+  if (code === 0)                   return 'Clear';
+  if (code >= 1  && code <= 3)      return 'Partly cloudy';
+  if (code >= 45 && code <= 48)     return 'Foggy';
+  if (code >= 51 && code <= 55)     return 'Drizzle';
+  if (code >= 61 && code <= 65)     return 'Rain';
+  if (code >= 71 && code <= 77)     return 'Snow';
+  if (code >= 80 && code <= 82)     return 'Showers';
+  if (code >= 95 && code <= 99)     return 'Thunderstorm';
+  return 'Cloudy';
+}
+
+function weatherIcon(code: number): string {
+  if (code === 0)                   return '☀️';
+  if (code >= 1  && code <= 3)      return '⛅';
+  if (code >= 45 && code <= 48)     return '🌫️';
+  if (code >= 51 && code <= 55)     return '🌧️';
+  if (code >= 61 && code <= 65)     return '🌧️';
+  if (code >= 71 && code <= 77)     return '❄️';
+  if (code >= 80 && code <= 82)     return '🌧️';
+  if (code >= 95 && code <= 99)     return '⛈️';
+  return '☁️';
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -287,32 +317,23 @@ function PvNodeCard({ row }: { row: PvRow }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function OverviewPage() {
-  const [nodes,      setNodes]      = useState<TelemetryRow[]>([]);
-  const [pvNodes,    setPvNodes]    = useState<PvRow[]>([]);
-  const [logs,       setLogs]       = useState<LogRow[]>([]);
-  const [me,         setMe]         = useState<Me | null>(null);
-  const [lastUpdate, setLastUpdate] = useState<string>('');
-  const [stale,      setStale]      = useState(false);
-  const [carbon,     setCarbon]     = useState<Record<string, unknown> | null>(null);
+  const [nodes,        setNodes]        = useState<TelemetryRow[]>([]);
+  const [pvNodes,      setPvNodes]      = useState<PvRow[]>([]);
+  const [me,           setMe]           = useState<Me | null>(null);
+  const [lastUpdate,   setLastUpdate]   = useState<string>('');
+  const [stale,        setStale]        = useState(false);
+  const [carbon,       setCarbon]       = useState<Record<string, unknown> | null>(null);
+  const [weather,      setWeather]      = useState<WeatherData | null>(null);
+  const [alerts,       setAlerts]       = useState<Alert[]>([]);
+  const [alertsError,  setAlertsError]  = useState(false);
 
   const esRef = useRef<EventSource | null>(null);
 
-  // Parse age from ts_utc (first node used for stale check)
   function applyRows(rows: TelemetryRow[]) {
     setNodes(rows);
     const ageSec = rows[0]?.ts_utc ? (Date.now() - parseUtcMs(rows[0].ts_utc)) / 1000 : 999;
     setStale(ageSec > 10);
     setLastUpdate(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-  }
-
-  async function fetchLogs() {
-    try {
-      const r = await fetch('/api/logs?range=5m&limit=40', { cache: 'no-store' });
-      if (r.ok) {
-        const data = await r.json();
-        if (Array.isArray(data)) setLogs(data.slice(0, 40));
-      }
-    } catch { /* ignore */ }
   }
 
   async function fetchPv() {
@@ -335,18 +356,58 @@ export default function OverviewPage() {
     } catch { /* ignore */ }
   }
 
+  async function fetchAlerts() {
+    try {
+      const r = await fetch('/api/alerts/active', { cache: 'no-store' });
+      if (r.ok) {
+        const data = await r.json();
+        if (Array.isArray(data)) {
+          setAlerts(data);
+          setAlertsError(false);
+        }
+      } else {
+        setAlertsError(true);
+      }
+    } catch {
+      setAlertsError(true);
+    }
+  }
+
+  async function resolveAlert(id: number) {
+    // Optimistic update — remove immediately
+    setAlerts(prev => prev.filter(a => a.id !== id));
+    try {
+      await fetch(`/api/alerts/${id}/resolve`, { method: 'PATCH', cache: 'no-store' });
+    } catch { /* ignore — already removed from UI */ }
+  }
+
   useEffect(() => {
+    // Auth
     fetch('/api/auth/me', { cache: 'no-store' })
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d) setMe(d); })
       .catch(() => {});
 
-    fetchLogs();
+    // Weather — once on mount, no polling
+    fetch(
+      'https://api.open-meteo.com/v1/forecast?latitude=43.8971&longitude=-78.8658&current=temperature_2m,weathercode&timezone=America/Toronto',
+      { cache: 'no-store' }
+    )
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (d?.current) {
+          setWeather({ temp: d.current.temperature_2m, code: d.current.weathercode });
+        }
+      })
+      .catch(() => { /* hide silently */ });
+
     fetchPv();
     fetchCarbon();
-    const logInterval    = setInterval(fetchLogs,  10000);
-    const pvInterval     = setInterval(fetchPv,    10000);
-    const carbonInterval = setInterval(fetchCarbon, 30000);
+    fetchAlerts();
+
+    const pvInterval      = setInterval(fetchPv,     10000);
+    const carbonInterval  = setInterval(fetchCarbon, 30000);
+    const alertsInterval  = setInterval(fetchAlerts, 10000);
 
     function connect() {
       const es = new EventSource('/api/stream');
@@ -369,9 +430,9 @@ export default function OverviewPage() {
 
     return () => {
       esRef.current?.close();
-      clearInterval(logInterval);
       clearInterval(pvInterval);
       clearInterval(carbonInterval);
+      clearInterval(alertsInterval);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -381,13 +442,23 @@ export default function OverviewPage() {
     window.location.href = '/';
   }
 
-  const faultCount   = nodes.filter(n => n.fault_active).length;
-  const activeCount  = nodes.filter(n => (Date.now() - parseUtcMs(n.ts_utc)) < 15000).length;
-  const pvLiveCount  = pvNodes.filter(n => (Date.now() - parseUtcMs(n.ts_utc)) < 15000).length;
+  const faultCount  = nodes.filter(n => n.fault_active).length;
+  const activeCount = nodes.filter(n => (Date.now() - parseUtcMs(n.ts_utc)) < 15000).length;
+  const pvLiveCount = pvNodes.filter(n => (Date.now() - parseUtcMs(n.ts_utc)) < 15000).length;
+
+  // Sort alerts: CRITICAL first, then WARNING, then by ts_utc DESC
+  const sortedAlerts = [...alerts]
+    .sort((a, b) => {
+      const sev = (s: string) => s === 'CRITICAL' ? 0 : s === 'WARNING' ? 1 : 2;
+      if (sev(a.severity) !== sev(b.severity)) return sev(a.severity) - sev(b.severity);
+      return parseUtcMs(b.ts_utc) - parseUtcMs(a.ts_utc);
+    })
+    .slice(0, 10);
 
   return (
     <div style={{ width: '100%', padding: '32px 5vw', minHeight: '100vh' }}>
 
+      {/* ── Section 1: Header ── */}
       <Header
         crumbs={[{ label: 'UEI Cloud', href: '/overview' }, { label: 'Overview' }]}
         nav={[
@@ -402,13 +473,59 @@ export default function OverviewPage() {
         onLogout={handleLogout}
       />
 
-      {/* Summary stats */}
+      {/* ── Section 2: Greeting + Weather ── */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
+        {/* Greeting */}
+        <div>
+          <div style={{
+            fontSize: '1.8rem',
+            fontWeight: 800,
+            letterSpacing: '-0.02em',
+            lineHeight: 1.1,
+            background: 'var(--title-grad)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+          }}>
+            Hi, {me?.org_name ?? 'there'}
+          </div>
+          <div style={{ fontSize: '0.85rem', color: 'var(--txt3)', fontWeight: 500, marginTop: 6 }}>
+            Welcome to UEI Cloud
+          </div>
+        </div>
+
+        {/* Weather widget */}
+        {weather && (
+          <div style={{
+            background: 'var(--surf)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--r)',
+            padding: '12px 18px',
+            textAlign: 'right',
+            flexShrink: 0,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
+              <span style={{ fontSize: '1.1rem' }}>{weatherIcon(weather.code)}</span>
+              <span style={{ fontFamily: 'var(--ff-mono)', fontSize: '1.1rem', fontWeight: 700, color: 'var(--txt)' }}>
+                {weather.temp.toFixed(1)}°C
+              </span>
+            </div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--txt3)', marginTop: 3 }}>
+              {weatherDesc(weather.code)}
+            </div>
+            <div style={{ fontSize: '0.62rem', color: 'var(--txt3)', marginTop: 2 }}>
+              Oshawa, ON
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Section 3: Summary stats ── */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 32, flexWrap: 'wrap' }}>
         {[
-          { label: 'BMS nodes',   value: nodes.length,            color: 'var(--txt)' },
-          { label: 'PV nodes',    value: pvNodes.length,          color: '#facc15'    },
+          { label: 'BMS nodes',   value: nodes.length,              color: 'var(--txt)' },
+          { label: 'PV nodes',    value: pvNodes.length,            color: '#facc15'    },
           { label: 'Live',        value: activeCount + pvLiveCount, color: 'var(--ok)'  },
-          { label: 'Faults',      value: faultCount,              color: faultCount > 0 ? 'var(--err)' : 'var(--txt)' },
+          { label: 'Faults',      value: faultCount,                color: faultCount > 0 ? 'var(--err)' : 'var(--txt)' },
         ].map(({ label, value, color }) => (
           <div key={label} style={{ flex: '1 1 140px', background: 'var(--surf)', border: '1px solid var(--border)', borderRadius: 'var(--r)', padding: '18px 20px' }}>
             <div style={{ fontSize: '0.68rem', fontWeight: 600, color: 'var(--txt3)', marginBottom: 6 }}>{label}</div>
@@ -429,7 +546,7 @@ export default function OverviewPage() {
         </div>
       </div>
 
-      {/* Node cards */}
+      {/* ── Section 4: BMS Node cards — horizontal scroll ── */}
       {nodes.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--txt3)', fontSize: '0.9rem' }}>
           Waiting for telemetry…
@@ -440,84 +557,148 @@ export default function OverviewPage() {
             Nodes · click to open dashboard
           </div>
           <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+            display: 'flex',
+            flexDirection: 'row',
             gap: 16,
+            overflowX: 'auto',
+            paddingBottom: 8,
+            WebkitOverflowScrolling: 'touch',
             marginBottom: 40,
           }}>
             {nodes.map(row => (
-              <NodeCard key={row.node_id} row={row} stale={stale} />
+              <div key={row.node_id} style={{ flexShrink: 0, width: 300 }}>
+                <NodeCard row={row} stale={stale} />
+              </div>
             ))}
           </div>
         </>
       )}
 
-      {/* PV Node cards */}
+      {/* ── Section 5: PV Node cards — horizontal scroll ── */}
       {pvNodes.length > 0 && (
         <>
           <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--txt3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 14 }}>
             Solar / PV nodes
           </div>
           <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+            display: 'flex',
+            flexDirection: 'row',
             gap: 16,
+            overflowX: 'auto',
+            paddingBottom: 8,
+            WebkitOverflowScrolling: 'touch',
             marginBottom: 40,
           }}>
             {pvNodes.map(row => (
-              <PvNodeCard key={row.node_id} row={row} />
+              <div key={row.node_id} style={{ flexShrink: 0, width: 300 }}>
+                <PvNodeCard row={row} />
+              </div>
             ))}
           </div>
         </>
       )}
 
-      {/* Recent logs */}
+      {/* ── Section 6: Active Alerts ── */}
       <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--txt3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 14 }}>
-        Recent activity · last 5 min
+        Active Alerts ({alerts.length})
       </div>
       <div style={{ background: 'var(--surf)', border: '1px solid var(--border)', borderRadius: 'var(--r)', overflow: 'hidden', marginBottom: 40 }}>
-        {logs.length === 0 ? (
-          <div style={{ padding: '24px 20px', fontSize: '0.82rem', color: 'var(--txt3)' }}>No recent logs.</div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                  {['Time (UTC)', 'Node', 'SoC', 'Voltage', 'Temp', 'Fault'].map(h => (
-                    <th key={h} style={{ padding: '9px 16px', textAlign: 'left', fontSize: '0.65rem', fontWeight: 600, color: 'var(--txt3)', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {logs.map((row, i) => (
-                  <tr
-                    key={i}
-                    onClick={() => { window.location.href = `/dashboard?node=${encodeURIComponent(row.node_id)}`; }}
-                    style={{ borderBottom: i < logs.length - 1 ? '1px solid var(--border)' : 'none', cursor: 'pointer', transition: 'background 0.1s' }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLTableRowElement).style.background = 'var(--surf2)'; }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLTableRowElement).style.background = 'transparent'; }}
-                  >
-                    <td style={{ padding: '9px 16px', color: 'var(--txt3)', fontFamily: "'DM Mono', monospace", whiteSpace: 'nowrap' }}>{fmtTime(row.ts_utc)}</td>
-                    <td style={{ padding: '9px 16px', color: 'var(--txt)', fontFamily: "'DM Mono', monospace', fontWeight: 600" }}>{row.node_id}</td>
-                    <td style={{ padding: '9px 16px', color: socColor(row.soc ?? 0), fontFamily: "'DM Mono', monospace" }}>{row.soc != null ? `${row.soc.toFixed(1)}%` : '—'}</td>
-                    <td style={{ padding: '9px 16px', color: 'var(--txt)', fontFamily: "'DM Mono', monospace" }}>{row.pack_voltage != null ? `${row.pack_voltage.toFixed(2)} V` : '—'}</td>
-                    <td style={{ padding: '9px 16px', color: tempColor(row.temp_high ?? 0), fontFamily: "'DM Mono', monospace" }}>{row.temp_high != null ? `${row.temp_high.toFixed(1)} °C` : '—'}</td>
-                    <td style={{ padding: '9px 16px' }}>
-                      {row.fault_active ? (
-                        <span style={{ fontSize: '0.62rem', fontWeight: 700, color: 'var(--err)', background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.25)', borderRadius: 4, padding: '1px 6px', letterSpacing: '0.05em' }}>FAULT</span>
-                      ) : (
-                        <span style={{ fontSize: '0.62rem', color: 'var(--txt3)' }}>—</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {alertsError ? (
+          <div style={{ padding: '24px 20px', fontSize: '0.82rem', color: 'var(--txt3)' }}>
+            Unable to load alerts
           </div>
+        ) : sortedAlerts.length === 0 ? (
+          <div style={{ padding: '24px', textAlign: 'center', fontSize: '0.85rem', color: 'var(--ok)' }}>
+            ✓ All clear — no active alerts
+          </div>
+        ) : (
+          sortedAlerts.map((alert, i) => {
+            const isCritical = alert.severity === 'CRITICAL';
+            const isWarning  = alert.severity === 'WARNING';
+            const dotBg      = isCritical ? '#f87171' : isWarning ? '#fb923c' : 'var(--txt3)';
+            const dotShadow  = isCritical ? '0 0 6px rgba(248,113,113,0.4)' : 'none';
+            const rowBg      = isCritical ? 'rgba(248,113,113,0.04)' : 'transparent';
+            return (
+              <div
+                key={alert.id}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: '12px 20px',
+                  borderBottom: i < sortedAlerts.length - 1 ? '1px solid var(--border)' : 'none',
+                  background: rowBg,
+                }}
+              >
+                {/* Severity dot */}
+                <span style={{
+                  width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                  background: dotBg,
+                  boxShadow: dotShadow,
+                }} />
+
+                {/* Message + meta */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '0.82rem', color: 'var(--txt)', lineHeight: 1.4 }}>
+                    {alert.message}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+                    <span style={{ fontFamily: 'var(--ff-mono)', fontSize: '0.68rem', color: 'var(--txt3)' }}>
+                      {alert.node_id}
+                    </span>
+                    <span style={{
+                      fontSize: '0.6rem',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.06em',
+                      background: 'var(--surf2)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 4,
+                      padding: '1px 6px',
+                      color: 'var(--txt3)',
+                    }}>
+                      {alert.source}
+                    </span>
+                    <span style={{ fontSize: '0.65rem', color: 'var(--txt3)', fontFamily: 'var(--ff-mono)' }}>
+                      {ageLabel(alert.ts_utc)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Resolve button */}
+                <button
+                  onClick={() => resolveAlert(alert.id)}
+                  style={{
+                    flexShrink: 0,
+                    background: 'transparent',
+                    border: '1px solid var(--border)',
+                    borderRadius: 6,
+                    padding: '4px 10px',
+                    fontSize: '0.72rem',
+                    color: 'var(--txt3)',
+                    cursor: 'pointer',
+                    transition: 'color 0.15s, border-color 0.15s',
+                    fontFamily: 'var(--ff-sans)',
+                  }}
+                  onMouseEnter={e => {
+                    const b = e.currentTarget as HTMLButtonElement;
+                    b.style.color = 'var(--ok)';
+                    b.style.borderColor = 'rgba(74,222,128,0.3)';
+                  }}
+                  onMouseLeave={e => {
+                    const b = e.currentTarget as HTMLButtonElement;
+                    b.style.color = 'var(--txt3)';
+                    b.style.borderColor = 'var(--border)';
+                  }}
+                >
+                  ✓
+                </button>
+              </div>
+            );
+          })
         )}
       </div>
 
-      {/* Carbon Emissions */}
+      {/* ── Section 7: Carbon Emissions + disclaimer ── */}
       {carbon && (() => {
         const co2_g         = Number(carbon.co2_g         ?? carbon.total_co2_g         ?? 0);
         const co2_avoided_g = Number(carbon.co2_avoided_g ?? carbon.total_co2_avoided_g ?? 0);
@@ -534,7 +715,7 @@ export default function OverviewPage() {
             <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--txt3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 14 }}>
               Carbon Emissions · All nodes · last hour
             </div>
-            <div style={{ background: 'var(--surf)', border: '1px solid var(--border)', borderRadius: 'var(--r)', padding: '18px 20px', marginBottom: 40 }}>
+            <div style={{ background: 'var(--surf)', border: '1px solid var(--border)', borderRadius: 'var(--r)', padding: '18px 20px', marginBottom: 0 }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 16, marginBottom: 16 }}>
                 {[
                   { label: 'CO₂ Emitted',  value: (co2_g / 1000).toFixed(3),         unit: 'kg',  sub: `${co2_g.toFixed(1)} g total`,         color: 'var(--err)' },
@@ -563,11 +744,26 @@ export default function OverviewPage() {
                 ))}
               </div>
             </div>
+            {/* Disclaimer footnote */}
+            <p style={{
+              fontSize: '0.68rem',
+              color: 'var(--txt3)',
+              fontStyle: 'italic',
+              marginTop: 12,
+              marginBottom: 40,
+              maxWidth: 600,
+              lineHeight: 1.5,
+            }}>
+              Emissions estimated using grid emission factor methodology
+              (gCO₂/kWh × energy consumed). Static regional intensity values —
+              real-time marginal emission rates would require integration with
+              services such as ElectricityMaps or WattTime.
+            </p>
           </>
         );
       })()}
 
-      {/* Footer */}
+      {/* ── Section 8: Footer ── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, borderTop: '1px solid var(--border)' }}>
         <span style={{ fontSize: '0.72rem', color: 'var(--txt3)' }}>UEI Cloud · Unified Energy Interface</span>
         <button
