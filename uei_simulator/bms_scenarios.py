@@ -481,6 +481,8 @@ class FaultRecovery(BMSScenario):
 
 # ── Scenario registry ─────────────────────────────────────────────────────────
 
+from .real_hw_mimic import RealHardwareMimic
+
 BMS_SCENARIOS = {
     1: NormalOperation,
     2: LowBattery,
@@ -490,4 +492,5 @@ BMS_SCENARIOS = {
     6: Degradation,
     7: FaultActive,
     8: FaultRecovery,
+    9: RealHardwareMimic,
 }

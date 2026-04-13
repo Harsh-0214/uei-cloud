@@ -13,6 +13,7 @@ _BMS_SCENARIO_NAMES = {
     6: "Degradation",
     7: "Fault Active",
     8: "Fault Recovery",
+    9: "Real Hardware Mimic (LiFePO4 4S)",
 }
 
 _PV_SCENARIO_NAMES = {
@@ -37,6 +38,7 @@ _BMS_CLASS_NAMES = {
     6: "Degradation",
     7: "FaultActive",
     8: "FaultRecovery",
+    9: "RealHardwareMimic",
 }
 
 _PV_CLASS_NAMES = {

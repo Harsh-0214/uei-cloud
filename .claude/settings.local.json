@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"from uei_simulator.bms_scenarios import BMS_SCENARIOS; from uei_simulator.real_hw_mimic import RealHardwareMimic; s = RealHardwareMimic\\(\\); p = s.step\\(\\); print\\(p\\)\")"
+    ]
+  }
+}
