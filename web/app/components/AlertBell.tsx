@@ -58,11 +58,12 @@ function BellIcon({ pulsing }: { pulsing: boolean }) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function AlertBell() {
-  const [alerts, setAlerts]     = useState<Alert[]>([]);
-  const [open, setOpen]         = useState(false);
-  const [pulsing, setPulsing]   = useState(false);
-  const [hidden, setHidden]     = useState(false);   // 401 → hide entirely
-  const [times, setTimes]       = useState(0);       // tick counter for relative times
+  const [alerts, setAlerts]         = useState<Alert[]>([]);
+  const [dismissedIds, setDismissedIds] = useState<Set<number>>(new Set());
+  const [open, setOpen]             = useState(false);
+  const [pulsing, setPulsing]       = useState(false);
+  const [hidden, setHidden]         = useState(false);   // 401 → hide entirely
+  const [times, setTimes]           = useState(0);       // tick counter for relative times
 
   const prevCountRef = useRef(0);
   const wrapperRef   = useRef<HTMLDivElement>(null);
@@ -76,6 +77,14 @@ export default function AlertBell() {
       if (!res.ok) return;
       const data: Alert[] = await res.json();
       setAlerts(data);
+
+      // Clean up dismissedIds — remove IDs that are no longer in the active list
+      setDismissedIds(prev => {
+        if (prev.size === 0) return prev;
+        const activeIds = new Set(data.map(a => a.id));
+        const cleaned = new Set([...prev].filter(id => activeIds.has(id)));
+        return cleaned.size === prev.size ? prev : cleaned;
+      });
 
       // Pulse bell if a new CRITICAL appeared
       const critCount = data.filter(a => a.severity === 'CRITICAL').length;
@@ -118,20 +127,19 @@ export default function AlertBell() {
   // ── Resolve alert ─────────────────────────────────────────────────────────
 
   async function resolveAlert(id: number) {
+    // Optimistic dismiss — hide immediately, clean up from dismissed set when server confirms
+    setDismissedIds(prev => new Set([...prev, id]));
     try {
-      const res = await fetch(`/api/alerts/${id}/resolve`, { method: 'PATCH' });
-      if (res.ok) {
-        setAlerts(prev => prev.filter(a => a.id !== id));
-        prevCountRef.current = Math.max(0, prevCountRef.current - 1);
-      }
+      await fetch(`/api/alerts/${id}/resolve`, { method: 'PATCH' });
     } catch {
-      // silent
+      // silent — next poll will re-show if still active
     }
   }
 
   if (hidden) return null;
 
-  const count = alerts.length;
+  const visibleAlerts = alerts.filter(a => !dismissedIds.has(a.id));
+  const count = visibleAlerts.length;
   const badgeLabel = count > 9 ? '9+' : String(count);
 
   return (
@@ -243,7 +251,7 @@ export default function AlertBell() {
             </div>
 
             {/* Alert rows */}
-            {alerts.length === 0 ? (
+            {visibleAlerts.length === 0 ? (
               <div style={{
                 padding: '24px 16px',
                 textAlign: 'center',
@@ -253,13 +261,13 @@ export default function AlertBell() {
                 No active alerts
               </div>
             ) : (
-              alerts.map((alert, i) => (
+              visibleAlerts.map((alert, i) => (
                 <div
                   key={alert.id}
                   style={{
                     display: 'flex', alignItems: 'flex-start', gap: 10,
                     padding: '12px 16px',
-                    borderBottom: i < alerts.length - 1 ? '1px solid var(--border)' : 'none',
+                    borderBottom: i < visibleAlerts.length - 1 ? '1px solid var(--border)' : 'none',
                     transition: 'background 0.1s',
                   }}
                   onMouseEnter={e => {
