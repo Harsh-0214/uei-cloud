@@ -61,7 +61,7 @@ function getChartDefaults() {
     maintainAspectRatio: false,
     interaction: { mode: 'index' as const, intersect: false },
     plugins: {
-      legend: { labels: { color: v('--txt3', '#454540'), font: { size: 11 }, boxWidth: 12 } },
+      legend: { display: false, labels: { color: v('--txt3', '#454540'), font: { size: 11 }, boxWidth: 12 } },
       tooltip: {
         backgroundColor: v('--surf2', '#252523'),
         titleColor: v('--txt2', '#88887e'),
@@ -86,26 +86,36 @@ function getChartDefaults() {
 // ── PV Dashboard ──────────────────────────────────────────────────────────────
 
 export default function PvDashboard() {
-  const [me,         setMe]         = useState<Me | null>(null);
-  const [pvNodes,    setPvNodes]    = useState<PvRow[]>([]);
-  const [selectedId, setSelectedId] = useState('');
-  const [current,    setCurrent]    = useState<PvRow | null>(null);
-  const [timeRange,  setTimeRange]  = useState<'5m' | '15m' | '30m' | '1h' | '6h' | '24h'>('1h');
-  const [lastUpdate, setLastUpdate] = useState('');
-  const [stale,      setStale]      = useState(false);
+  const [me,          setMe]          = useState<Me | null>(null);
+  const [pvNodes,     setPvNodes]     = useState<PvRow[]>([]);
+  const [selectedId,  setSelectedId]  = useState('');
+  const [current,     setCurrent]     = useState<PvRow | null>(null);
+  const [timeRange,   setTimeRange]   = useState<'5m' | '15m' | '30m' | '1h' | '6h' | '24h'>('1h');
+  const [lastUpdate,  setLastUpdate]  = useState('');
+  const [stale,       setStale]       = useState(false);
+  const [compareMode, setCompareMode] = useState(false);
+  const [compareId,   setCompareId]   = useState('');
 
-  const invrRef  = useRef<HTMLCanvasElement>(null);
-  const loadRef  = useRef<HTMLCanvasElement>(null);
-  const battRef  = useRef<HTMLCanvasElement>(null);
+  const invrRef   = useRef<HTMLCanvasElement>(null);
+  const loadRef   = useRef<HTMLCanvasElement>(null);
+  const battRef   = useRef<HTMLCanvasElement>(null);
   const chartsRef = useRef<Record<string, Chart>>({});
 
-  const selectedIdRef = useRef('');
-  const timeRangeRef  = useRef('1h');
+  const selectedIdRef  = useRef('');
+  const timeRangeRef   = useRef('1h');
+  const compareIdRef   = useRef('');
+  const compareModeRef = useRef(false);
   const requestedNodeRef = useRef<string>(
     typeof window !== 'undefined'
       ? new URLSearchParams(window.location.search).get('node') ?? ''
       : ''
   );
+
+  // Keep refs in sync so intervals never have stale closures
+  useEffect(() => { selectedIdRef.current  = selectedId;  }, [selectedId]);
+  useEffect(() => { timeRangeRef.current   = timeRange;   }, [timeRange]);
+  useEffect(() => { compareIdRef.current   = compareId;   }, [compareId]);
+  useEffect(() => { compareModeRef.current = compareMode; }, [compareMode]);
 
   // ── Chart init ────────────────────────────────────────────────────────────
 
@@ -117,62 +127,98 @@ export default function PvDashboard() {
     chartsRef.current.batt = new Chart(battRef.current, { type: 'line', data: { labels: [], datasets: [] }, options: { ...cd } });
   }, []);
 
-  function updateChart(
-    chart: Chart,
-    data: Record<string, number>[],
-    lines: { key: string; label: string; color: string }[],
-    range: string,
-  ) {
-    const shortRange = range === '5m' || range === '15m' || range === '30m';
-    chart.data.labels = (data ?? []).map(d => {
-      const t = new Date(d.time ?? d.ts_utc);
-      return shortRange
-        ? t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-        : t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    });
-    chart.data.datasets = lines.map(l => ({
-      label: l.label, data: (data ?? []).map(d => Number(d[l.key])),
-      borderColor: l.color, backgroundColor: l.color + '18',
-      borderWidth: 2, pointRadius: 0, fill: true, tension: 0.4,
-    }));
-    const maxTicks = shortRange ? 8 : range === '24h' ? 8 : 6;
-    (chart.options.scales!.x as { ticks: { maxTicksLimit: number } }).ticks.maxTicksLimit = maxTicks;
-    chart.update('none');
+  function clearCharts() {
+    for (const chart of Object.values(chartsRef.current)) {
+      chart.data.labels   = [];
+      chart.data.datasets = [];
+      chart.update('none');
+    }
   }
 
   // ── Fetch history + update charts ────────────────────────────────────────
 
-  const fetchCharts = useCallback(async (nodeId: string, range: string) => {
+  const fetchCharts = useCallback(async (nodeId: string, range: string, cmpId = '') => {
     if (!nodeId) return;
     try {
-      const r = await fetch(
-        `/api/pv/telemetry?node_id=${encodeURIComponent(nodeId)}&range=${range}&limit=500`,
-        { cache: 'no-store' },
-      );
-      if (!r.ok) return;
-      const rows: Record<string, number>[] = await r.json();
-      // rows come newest-first — reverse for charts
-      const data = [...rows].reverse().map(row => ({ ...row, time: row.ts_utc }));
+      const [primaryRows, cmpRows] = await Promise.all([
+        fetch(`/api/pv/telemetry?node_id=${encodeURIComponent(nodeId)}&range=${range}&limit=500`, { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+        cmpId
+          ? fetch(`/api/pv/telemetry?node_id=${encodeURIComponent(cmpId)}&range=${range}&limit=500`, { cache: 'no-store' }).then(r => r.ok ? r.json() : [])
+          : Promise.resolve([]),
+      ]);
 
-      if (chartsRef.current.invr) {
-        updateChart(chartsRef.current.invr, data, [
+      // rows come newest-first — reverse for charts
+      const data    = [...(primaryRows as Record<string, number>[])].reverse().map(row => ({ ...row, time: row.ts_utc }));
+      const cmpData = cmpId ? [...(cmpRows as Record<string, number>[])].reverse().map(row => ({ ...row, time: row.ts_utc })) : [];
+
+      const shortRange = ['5m', '15m', '30m'].includes(range);
+      const maxTicks   = shortRange ? 8 : range === '24h' ? 8 : 6;
+
+      type DS = { key: string; label: string; color: string };
+      function buildDatasets(
+        primary: Record<string, number>[],
+        pLines: DS[],
+        compare: Record<string, number>[],
+        cLines: DS[],
+      ) {
+        const ds = pLines.map(l => ({
+          label: cmpId ? `${nodeId} ${l.label}` : l.label,
+          data: (primary ?? []).map(d => Number(d[l.key])),
+          borderColor: l.color, backgroundColor: l.color + '18',
+          borderWidth: 2, pointRadius: 0, fill: true, tension: 0.4,
+        }));
+        if (cmpId) cLines.forEach(l => ds.push({
+          label: `${cmpId} ${l.label}`,
+          data: (compare ?? []).map(d => Number(d[l.key])),
+          borderColor: l.color, backgroundColor: l.color + '18',
+          borderWidth: 2, pointRadius: 0, fill: true, tension: 0.4,
+        }));
+        return ds;
+      }
+
+      const labels = data.map(d => {
+        const t = new Date(d.time ?? d.ts_utc);
+        return shortRange
+          ? t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+          : t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      });
+
+      const configs: [string, ReturnType<typeof buildDatasets>][] = [
+        ['invr', buildDatasets(data, [
           { key: 'invr1', label: 'Inverter 1 (A)', color: '#facc15' },
           { key: 'invr2', label: 'Inverter 2 (A)', color: '#fb923c' },
-        ], range);
-      }
-      if (chartsRef.current.load) {
-        updateChart(chartsRef.current.load, data, [
+        ], cmpData, [
+          { key: 'invr1', label: 'Inverter 1 (A)', color: '#38bdf8' },
+          { key: 'invr2', label: 'Inverter 2 (A)', color: '#4ade80' },
+        ])],
+        ['load', buildDatasets(data, [
           { key: 'ld1', label: 'Load 1 (A)', color: '#60a5fa' },
           { key: 'ld2', label: 'Load 2 (A)', color: '#34d399' },
           { key: 'ld3', label: 'Load 3 (A)', color: '#a78bfa' },
           { key: 'ld4', label: 'Load 4 (A)', color: '#f87171' },
-        ], range);
-      }
-      if (chartsRef.current.batt) {
-        updateChart(chartsRef.current.batt, data, [
+        ], cmpData, [
+          { key: 'ld1', label: 'Load 1 (A)', color: '#93c5fd' },
+          { key: 'ld2', label: 'Load 2 (A)', color: '#6ee7b7' },
+          { key: 'ld3', label: 'Load 3 (A)', color: '#c4b5fd' },
+          { key: 'ld4', label: 'Load 4 (A)', color: '#fca5a5' },
+        ])],
+        ['batt', buildDatasets(data, [
           { key: 'bv1', label: 'Battery V1 (V)', color: '#4ade80' },
           { key: 'bv2', label: 'Battery V2 (V)', color: '#2dd4bf' },
-        ], range);
+        ], cmpData, [
+          { key: 'bv1', label: 'Battery V1 (V)', color: '#86efac' },
+          { key: 'bv2', label: 'Battery V2 (V)', color: '#99f6e4' },
+        ])],
+      ];
+
+      for (const [key, datasets] of configs) {
+        const chart = chartsRef.current[key];
+        if (!chart) continue;
+        chart.data.labels   = labels;
+        chart.data.datasets = datasets;
+        (chart.options.scales!.x as { ticks: { maxTicksLimit: number } }).ticks.maxTicksLimit = maxTicks;
+        (chart.options.plugins as { legend: { display: boolean } }).legend.display = !!cmpId;
+        chart.update('none');
       }
     } catch { /* ignore */ }
   }, []);
@@ -225,7 +271,7 @@ export default function PvDashboard() {
   useEffect(() => {
     if (selectedId) {
       initCharts();
-      fetchCharts(selectedId, timeRange);
+      fetchCharts(selectedId, timeRange, compareModeRef.current ? compareIdRef.current : '');
       fetchLatest(selectedId);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -241,14 +287,36 @@ export default function PvDashboard() {
   function handleNodeChange(id: string) {
     selectedIdRef.current = id;
     setSelectedId(id);
+    clearCharts();
     fetchLatest(id);
-    fetchCharts(id, timeRangeRef.current);
+    fetchCharts(id, timeRangeRef.current, compareModeRef.current ? compareIdRef.current : '');
   }
 
   function handleRangeChange(r: typeof timeRange) {
     timeRangeRef.current = r;
     setTimeRange(r);
-    fetchCharts(selectedIdRef.current, r);
+    fetchCharts(selectedIdRef.current, r, compareModeRef.current ? compareIdRef.current : '');
+  }
+
+  function handleCompareChange(id: string) {
+    compareIdRef.current = id;
+    setCompareId(id);
+    fetchCharts(selectedIdRef.current, timeRangeRef.current, id);
+  }
+
+  function toggleCompare() {
+    if (compareMode) {
+      setCompareMode(false);
+      setCompareId('');
+      clearCharts();
+      fetchCharts(selectedIdRef.current, timeRangeRef.current);
+    } else {
+      const other = pvNodes.find(n => n.node_id !== selectedId);
+      if (!other) return;
+      setCompareMode(true);
+      setCompareId(other.node_id);
+      fetchCharts(selectedIdRef.current, timeRangeRef.current, other.node_id);
+    }
   }
 
   async function handleLogout() {
@@ -304,7 +372,7 @@ export default function PvDashboard() {
               </span>
             </div>
 
-            {/* Node selector */}
+            {/* Primary node selector */}
             <select
               value={selectedId}
               onChange={e => handleNodeChange(e.target.value)}
@@ -324,9 +392,69 @@ export default function PvDashboard() {
                 <option key={n.node_id} value={n.node_id}>{n.node_id}</option>
               ))}
             </select>
+
+            {/* Compare node selector — visible when compare mode is active */}
+            {compareMode && (
+              <select
+                value={compareId}
+                onChange={e => handleCompareChange(e.target.value)}
+                style={{
+                  fontFamily: "'DM Mono', monospace",
+                  fontSize: '0.78rem',
+                  background: 'var(--surf2)',
+                  border: '1px solid rgba(56,189,248,0.4)',
+                  borderRadius: 6,
+                  color: '#38bdf8',
+                  padding: '5px 10px',
+                  cursor: 'pointer',
+                  outline: 'none',
+                }}
+              >
+                {pvNodes.filter(n => n.node_id !== selectedId).map(n => (
+                  <option key={n.node_id} value={n.node_id}>{n.node_id}</option>
+                ))}
+              </select>
+            )}
+
+            {/* Compare toggle */}
+            <button
+              onClick={toggleCompare}
+              disabled={pvNodes.length < 2}
+              style={{
+                fontFamily: 'var(--ff-sans)',
+                fontSize: '0.72rem',
+                fontWeight: 600,
+                padding: '5px 12px',
+                borderRadius: 6,
+                cursor: pvNodes.length < 2 ? 'not-allowed' : 'pointer',
+                border: compareMode ? '1px solid rgba(56,189,248,0.4)' : '1px solid var(--border)',
+                background: compareMode ? 'rgba(56,189,248,0.1)' : 'transparent',
+                color: compareMode ? '#38bdf8' : 'var(--txt3)',
+                transition: 'all 0.15s',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                opacity: pvNodes.length < 2 ? 0.4 : 1,
+              }}
+            >
+              {compareMode && (
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#38bdf8', display: 'inline-block' }} />
+              )}
+              {compareMode ? '× Compare' : '⇄ Compare'}
+            </button>
           </div>
         }
       />
+
+      {/* Compare indicator */}
+      {compareMode && compareId && (
+        <div style={{ marginBottom: 16, fontSize: '0.78rem', color: 'var(--txt3)' }}>
+          Comparing{' '}
+          <span style={{ color: '#facc15', fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>{selectedId}</span>
+          {' vs '}
+          <span style={{ color: '#38bdf8', fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>{compareId}</span>
+        </div>
+      )}
 
       {pvNodes.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--txt3)', fontSize: '0.9rem' }}>
