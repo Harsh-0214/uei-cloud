@@ -8,3 +8,4 @@ grafana_data/
 web/.env.local
 web/.next/
 web/node_modules/
+web/tsconfig.tsbuildinfo
