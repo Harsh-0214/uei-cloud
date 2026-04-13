@@ -177,7 +177,7 @@ export default function PvDashboard() {
       }
 
       const labels = data.map(d => {
-        const t = new Date(d.time ?? d.ts_utc);
+        const t = new Date(d.time);
         return shortRange
           ? t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
           : t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
